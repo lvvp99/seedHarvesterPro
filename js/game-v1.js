@@ -54,7 +54,8 @@ const statFields = {
 
 const upgradeButtons = [...document.querySelectorAll(".statUpgradeButton")];
 const statsUpgrades = Object.fromEntries(upgradeButtons.map(button => [button.dataset.upgrade, {
-    button, cost: Number(button.dataset.cost), repeatable: button.dataset.repeatable === "true",
+    button, maxButton: document.getElementById(button.id + "Max"),
+    cost: Number(button.dataset.cost), repeatable: button.dataset.repeatable === "true",
     label: button.dataset.label || ({maxHealth:"Maximum Health",damage:"Basic attack damage",bulletSpeed:"Basic attack speed",fireRate:"Basic attack fire rate",criticalChance:"Basic attack critical chance",piercingRound:"Piercing Round",knockback:"Knockback",explosiveKernel:"Explosive Kernel"})[button.dataset.upgrade]
 }]));
 
@@ -148,7 +149,7 @@ const player = {
 
 const upgradeLevels = Object.fromEntries(Object.entries(statsUpgrades).filter(([, upgrade]) => upgrade.repeatable).map(([name]) => [name, 0]));
 // Fixed gains avoid exponential stat growth. Only cooldowns reduce proportionally.
-const upgradeGains = { maxHealth: 2, moveSpeed: 0.03, damage: 0.24, bulletSpeed: 0.15, fireRate: 0.015, criticalChance: 0.0035, seedValue: 0.015, cooldown: 0.005 };
+const upgradeGains = { maxHealth: 2, moveSpeed: 0.03, damage: 0.30, bulletSpeed: 0.20, fireRate: 0.020, criticalChance: 0.0045, seedValue: 0.015, cooldown: 0.005 };
 
 
 const abilityState = {
@@ -226,7 +227,9 @@ let gameStarted = false;
 let gameOver = false;
 
 const gameClock = {
+    // Combat timers keep running during boss fights; survival progress does not.
     elapsedMs: 0,
+    bossElapsedMs: 0,
     lastUpdatedAt: null,
     paused: true
 };
@@ -357,15 +360,25 @@ function isTimeFreezeActive() {
 // PLAY TIME AND HAY
 // --------------------
 
+function getSurvivalTime() {
+    return Math.max(0, gameClock.elapsedMs - gameClock.bossElapsedMs);
+}
+
 function updateGameClock(now = performance.now()) {
     if (gameClock.lastUpdatedAt !== null && !gameClock.paused) {
-        gameClock.elapsedMs += Math.max(0, now - gameClock.lastUpdatedAt);
+        const deltaMs = Math.max(0, now - gameClock.lastUpdatedAt);
+        gameClock.elapsedMs += deltaMs;
+        if (isBossEncounterActive()) gameClock.bossElapsedMs += deltaMs;
     }
 
     gameClock.lastUpdatedAt = now;
-    if (gameStarted && !gameOver) abilityProgress.awardMinutes(gameClock.elapsedMs);
+    const survivalMs = getSurvivalTime();
+    if (gameStarted && !gameOver) abilityProgress.awardMinutes(survivalMs);
+    const bossActive = isBossEncounterActive();
+    document.getElementById("timeLabel").textContent = bossActive ? "Time · Held" : "Time";
+    document.getElementById("timeHud").title = bossActive ? "Survival time stops until the boss is defeated." : "Survival time";
 
-    const totalSeconds = Math.floor(gameClock.elapsedMs / 1000);
+    const totalSeconds = Math.floor(survivalMs / 1000);
     const seconds = String(totalSeconds % 60).padStart(2, "0");
     const minutes = String(Math.floor(totalSeconds / 60) % 60).padStart(2, "0");
     const hours = Math.floor(totalSeconds / 3600);
@@ -404,7 +417,7 @@ function endGame() {
     dismissMysteryChoice();
     if (isAbilityGuideOpen()) document.getElementById("abilityGuideDialog").close();
     gameClock.paused = true;
-    survivalHistory.save(gameClock.elapsedMs, true);
+    survivalHistory.save(getSurvivalTime(), true);
     cancelMovement();
     updateHud();
     updateStatsPanel();
@@ -482,7 +495,7 @@ function spawnHayStack(incoming = worldState.started) {
     if (position) {
         hayStacks.push({
             ...position,
-            seeds: getHaySeedAmount(gameClock.elapsedMs),
+            seeds: getHaySeedAmount(getSurvivalTime()),
             spawnedAt: gameClock.elapsedMs
         });
         gameAudio.play("hay");
@@ -795,6 +808,8 @@ function updateAbilityHud() {
     }
 }
 
+const compactSeedPrice = new Intl.NumberFormat("en", { notation: "compact", maximumSignificantDigits: 2 });
+
 function updateStatsPanel() {
     const effects = [
         player.unlocks.piercingRound && "Piercing",
@@ -823,16 +838,29 @@ function updateStatsPanel() {
     for (const [name, upgrade] of Object.entries(statsUpgrades)) {
         const owned = !upgrade.repeatable && player.unlocks[name];
         const available = canPurchaseUpgrades() && !owned && player.seeds >= upgrade.cost;
-        const price = owned ? "Owned" : upgrade.cost.toString();
+        const price = owned ? "Owned" : upgrade.cost < 1000 ? upgrade.cost.toString() : compactSeedPrice.format(upgrade.cost);
         if (upgrade.button.textContent !== price) upgrade.button.textContent = price;
         upgrade.button.setAttribute("aria-disabled", String(!available));
         upgrade.button.classList.toggle("owned", Boolean(owned));
         upgrade.button.classList.toggle("affordable", available);
         upgrade.button.setAttribute("aria-label", owned ? upgrade.label + " purchased" : (upgrade.repeatable ? "Upgrade " : "Unlock ") + upgrade.label + " for " + upgrade.cost + " seeds");
         upgrade.button.title = owned ? "Applies only to your thrown rake." : upgrade.label + ": " + upgrade.cost + " seeds. " + (upgrade.button.dataset.benefit || "");
+        if (upgrade.maxButton) {
+            const quote = getUpgradePurchase(upgrade, true);
+            const canBuyMax = available && quote.count > 0;
+            const description = "Buy maximum " + upgrade.label + " upgrades: " + quote.count + " for " + quote.spent + " seeds";
+            upgrade.maxButton.setAttribute("aria-disabled", String(!canBuyMax));
+            upgrade.maxButton.classList.toggle("affordable", canBuyMax);
+            upgrade.maxButton.setAttribute("aria-label", description);
+            upgrade.maxButton.title = quote.count ? description : "Not enough seeds for " + upgrade.label + ". Next upgrade: " + upgrade.cost + " seeds.";
+        }
     }
     updateRakeLoadout();
-    document.getElementById("runBonusesSummary").textContent = getMysteryBonusesSummary().join(" · ") || "Find bonuses in mystery boxes.";
+    const bonuses = getMysteryBonusesSummary().join(" · ");
+    document.getElementById("runBonusesHeading").hidden = !bonuses;
+    const summary = document.getElementById("runBonusesSummary");
+    summary.hidden = !bonuses;
+    summary.textContent = bonuses;
 }
 
 statsToggle.addEventListener("click", function() {
@@ -953,12 +981,12 @@ function togglePause() {
 pauseBtn.addEventListener("click", togglePause);
 document.addEventListener("visibilitychange", updateGamePauseState);
 document.addEventListener("visibilitychange", () => {
-    if (document.hidden && gameStarted && !gameOver) survivalHistory.save(gameClock.elapsedMs);
+    if (document.hidden && gameStarted && !gameOver) survivalHistory.save(getSurvivalTime());
 });
 window.addEventListener("pagehide", () => {
     if (!gameStarted || gameOver) return;
     updateGameClock();
-    survivalHistory.save(gameClock.elapsedMs);
+    survivalHistory.save(getSurvivalTime());
 });
 window.addEventListener("blur", cancelMovement);
 
@@ -973,13 +1001,13 @@ function toggleAutomaticTarget() {
 }
 autoTargetToggle.addEventListener("click", toggleAutomaticTarget);
 
-function applyUpgrade(upgrade) {
-    if (upgrade === "seedValue") player.seedMultiplier += upgradeGains.seedValue;
-    if (upgrade === "moveSpeed") player.speed += upgradeGains.moveSpeed;
+function applyUpgrade(upgrade, count = 1) {
+    if (upgrade === "seedValue") player.seedMultiplier += upgradeGains.seedValue * count;
+    if (upgrade === "moveSpeed") player.speed += upgradeGains.moveSpeed * count;
     if (upgrade.startsWith("cooldown-")) {
         const state = abilityState[upgrade.slice(9)];
         const fraction = getCooldownRemainingMs(upgrade.slice(9)) / state.cooldownMs;
-        state.cooldownMs *= 1 - upgradeGains.cooldown;
+        state.cooldownMs *= Math.pow(1 - upgradeGains.cooldown, count);
         if (fraction > 0) state.lastUsedAt = gameClock.elapsedMs - state.cooldownMs * (1 - fraction);
         updateAbilityHud();
     }
@@ -987,29 +1015,29 @@ function applyUpgrade(upgrade) {
 
     if (upgrade === "maxHealth") {
 
-        player.maxHealth += upgradeGains.maxHealth;
-        player.health += upgradeGains.maxHealth;
+        player.maxHealth += upgradeGains.maxHealth * count;
+        player.health += upgradeGains.maxHealth * count;
 
     }
 
     if (upgrade === "damage") {
-        player.damage += upgradeGains.damage;
+        player.damage += upgradeGains.damage * count;
     }
 
     if (upgrade === "bulletSpeed") {
-        player.bulletSpeed += upgradeGains.bulletSpeed;
+        player.bulletSpeed += upgradeGains.bulletSpeed * count;
     }
 
     if (upgrade === "fireRate") {
         const oldRate = player.fireRate;
-        player.fireRate += upgradeGains.fireRate;
+        player.fireRate += upgradeGains.fireRate * count;
         // Preserve shot progress while applying the faster rate immediately.
         const remaining = Math.max(0, weaponState.nextShotAt - gameClock.elapsedMs);
         weaponState.nextShotAt = gameClock.elapsedMs + remaining / (player.fireRate / oldRate);
     }
 
     if (upgrade === "criticalChance") {
-        player.criticalChance += upgradeGains.criticalChance;
+        player.criticalChance += upgradeGains.criticalChance * count;
     }
 
 
@@ -1026,15 +1054,31 @@ function canPurchaseUpgrades() {
     return gameStarted && !gameOver && !isMysteryChoiceOpen() && !isAbilityGuideOpen() && !document.hidden;
 }
 
-function purchaseUpgrade(name) {
+function getUpgradePurchase(upgrade, maximum = false) {
+    let remainingSeeds = player.seeds;
+    let nextCost = upgrade.cost;
+    let count = 0;
+    // Follow the rounded price sequence exactly; geometric estimates miss its rounding.
+    while (Number.isFinite(remainingSeeds) && Number.isFinite(nextCost) && nextCost > 0 && remainingSeeds >= nextCost) {
+        remainingSeeds -= nextCost;
+        count++;
+        if (!upgrade.repeatable) break;
+        nextCost = Math.ceil(nextCost * 1.1);
+        if (!maximum) break;
+    }
+    return { count, remainingSeeds, nextCost, spent: player.seeds - remainingSeeds };
+}
+
+function purchaseUpgrade(name, maximum = false) {
     const upgrade = statsUpgrades[name];
     if (!upgrade || !canPurchaseUpgrades() || (!upgrade.repeatable && player.unlocks[name])) return false;
-    if (player.seeds < upgrade.cost) { gameAudio.play("denied"); return false; }
-    player.seeds -= upgrade.cost;
+    const quote = getUpgradePurchase(upgrade, maximum);
+    if (!quote.count) { gameAudio.play("denied"); return false; }
+    player.seeds = quote.remainingSeeds;
     if (upgrade.repeatable) {
-        upgradeLevels[name]++;
-        applyUpgrade(name);
-        upgrade.cost = Math.ceil(upgrade.cost * 1.1);
+        upgradeLevels[name] += quote.count;
+        applyUpgrade(name, quote.count);
+        upgrade.cost = quote.nextCost;
         upgrade.button.dataset.cost = upgrade.cost;
     } else player.unlocks[name] = true;
     gameAudio.play(upgrade.repeatable ? "purchase" : "unlock");
@@ -1043,6 +1087,7 @@ function purchaseUpgrade(name) {
 }
 for (const [name, upgrade] of Object.entries(statsUpgrades)) {
     upgrade.button.addEventListener("click", () => purchaseUpgrade(name));
+    upgrade.maxButton?.addEventListener("click", () => purchaseUpgrade(name, true));
 }
 
 // --------------------
@@ -1193,7 +1238,7 @@ function useLure() {
     if (!canUseAbility("lure")) return;
     if (!isLurePlacementValid(mouse)) { gameAudio.play("denied"); return; }
     gameAudio.play("lure");
-    if (abilityState.lure.point && abilityState.lure.castLevel >= 3) abilityExplosion(abilityState.lure.point, 170, abilityState.lure.explosionDamage);
+    if (abilityState.lure.point && abilityState.lure.castLevel >= 3) abilityExplosion(abilityState.lure.point, 170, abilityState.lure.explosionDamage, "#d8a1ff", "boss");
     abilityState.lure.castLevel = getAbilityLevel("lure");
     abilityState.lure.explosionDamage = getRakeDamage() * 4;
     abilityState.lure.point = { x: mouse.x, y: mouse.y };
@@ -1202,7 +1247,7 @@ function useLure() {
     updateAbilityHud();
 }
 
-// All monsters follow the lure until it expires, then resume chasing the player.
+// Regular monsters follow the lure; bosses always pursue the player.
 function getMonsterTarget() {
     const target = isLureActive() ? abilityState.lure.point : player;
     return { x: target.x, y: target.y };
@@ -1210,7 +1255,7 @@ function getMonsterTarget() {
 
 function updateLure() {
     if (abilityState.lure.point && !isLureActive()) {
-        if (abilityState.lure.castLevel >= 3) abilityExplosion(abilityState.lure.point, 170, abilityState.lure.explosionDamage);
+        if (abilityState.lure.castLevel >= 3) abilityExplosion(abilityState.lure.point, 170, abilityState.lure.explosionDamage, "#d8a1ff", "boss");
         abilityState.lure.point = null;
     }
 }
@@ -1727,7 +1772,7 @@ function gameLoop() {
     const previousTime = gameClock.elapsedMs;
     updateGameClock();
     const deltaMs = gameClock.elapsedMs - previousTime;
-    if (!gameOver) survivalHistory.checkpoint(gameClock.elapsedMs);
+    if (!gameOver) survivalHistory.checkpoint(getSurvivalTime());
 
     if (!gameClock.paused) {
         const frameMs = Math.min(deltaMs, 50);

@@ -6,7 +6,7 @@ const monsterTypes = {
     stalker: { name: "Stalker", description: "The fastest hunter. Use an ability to escape.", radius: 14, health: 36, speed: 110, damage: 10, xp: 5, color: "#5bd6cd", minTier: 1, weight: 14 },
     shellback: { name: "Shellback", description: "Heavily armored. Avoid getting cornered.", radius: 23, health: 120, speed: 34, damage: 20, xp: 10, color: "#729acb", minTier: 2, weight: 10 },
     charger: { name: "Charger", description: "Glows, then rushes. Dodge or get behind a wall.", radius: 20, health: 76, speed: 70, damage: 22, xp: 8, color: "#e56a78", minTier: 3, weight: 12 },
-    boss: { name: "Obsidian Colossus", description: "A massive black boss with enormous health. The map and death zone stop until it falls. Each encounter grows stronger and leaves rare loot.", radius: 50, health: 800, speed: 48, damage: 28, xp: 40, color: "#08080c", minTier: Infinity, weight: 0, availability: "Every 5 levels" }
+    boss: { name: "Obsidian Colossus", description: "A fast, relentless armored boss: double shockwaves, three aimed shard volleys, pursuing meteor barrages, a sweeping beam and a lightning-fast charge. Watch its warnings and use your escape abilities. Immune to Lure and Time Freeze. The map, survival timer and death zone stop until it falls. Each boss grows stronger and drops rare loot and coins.", radius: 50, health: 800, speed: 138, damage: 28, xp: 40, color: "#08080c", minTier: Infinity, weight: 0, availability: "Every 5 levels" }
 };
 
 const monsterSettings = {
@@ -25,7 +25,7 @@ const monsterState = {
     playerInvulnerableUntil: 0
 };
 
-function getMonsterDifficulty(elapsedMs = gameClock.elapsedMs) {
+function getMonsterDifficulty(elapsedMs = getSurvivalTime()) {
     const tier = Math.floor(elapsedMs / monsterSettings.difficultyStepMs);
     return {
         tier,
@@ -139,13 +139,20 @@ function chargerSpeedMultiplier(monster, deltaMs, destination) {
 }
 
 function updateMonsters(deltaMs) {
-    if (!canControlPlayer() || isTimeFreezeActive()) return;
+    if (!canControlPlayer()) return;
+    updateBossAttacks(deltaMs);
+    if (!canControlPlayer()) return;
     const seconds = Math.min(deltaMs, 50) / 1000;
-    const destination = getMonsterTarget();
-    const targetRadius = isLureActive() ? 7 : player.size * 0.35;
+    const frozen = isTimeFreezeActive();
+    const lureActive = isLureActive();
     for (const monster of monsters) {
+        const boss = monster.type === "boss";
+        if (frozen && !boss) continue;
         if (monster.type === "boss" && gameClock.elapsedMs < monster.moveAfter) continue;
-        const pulled = isLureActive() && abilityState.lure.castLevel >= 2;
+        if (boss && !bossCanPursueDuringAttack()) continue;
+        const destination = boss ? { x: player.x, y: player.y } : getMonsterTarget();
+        const targetRadius = lureActive && !boss ? 7 : player.size * 0.35;
+        const pulled = !boss && lureActive && abilityState.lure.castLevel >= 2;
         const speedMultiplier = pulled ? 1 : chargerSpeedMultiplier(monster, seconds * 1000, destination);
         const target = monsterNavigationTarget(monster, destination);
         const dx = target.x - monster.x;
@@ -172,8 +179,8 @@ function updateMonsters(deltaMs) {
             const nx = distance > 0 ? dx / distance : Math.cos(a.id);
             const ny = distance > 0 ? dy / distance : Math.sin(a.id);
             const push = Math.min((minimum - distance) / 2, 30 * seconds);
-            moveActor(a, nx * push, ny * push, a.radius);
-            moveActor(b, -nx * push, -ny * push, b.radius);
+            if ((!frozen || a.type === "boss") && !(a.type === "boss" && !bossCanPursueDuringAttack())) moveActor(a, nx * push, ny * push, a.radius);
+            if ((!frozen || b.type === "boss") && !(b.type === "boss" && !bossCanPursueDuringAttack())) moveActor(b, -nx * push, -ny * push, b.radius);
         }
     }
     for (const monster of monsters) clampMonsterToMap(monster);
@@ -228,7 +235,9 @@ function resolveBulletHits(bullet, startX, startY) {
         const hitY = startY + (bullet.y - startY) * time;
         damageMonster(monster, bullet.damage);
 
-        if (bullet.kind === "rake" && bullet.knockback && monster.health > 0) {
+        // Keep the warned attack anchored in place so its visible path stays truthful.
+        if (bullet.kind === "rake" && bullet.knockback && monster.health > 0
+            && !(monster.type === "boss" && !bossCanPursueDuringAttack())) {
             const speed = Math.hypot(bullet.dx, bullet.dy);
             if (speed > 0) {
                 moveActor(monster, bullet.dx / speed * 24, bullet.dy / speed * 24, monster.radius);
@@ -254,10 +263,11 @@ function resolveBulletHits(bullet, startX, startY) {
 }
 
 function updateMonsterContact() {
-    if (!canControlPlayer() || isTimeFreezeActive()
+    if (!canControlPlayer()
         || gameClock.elapsedMs < monsterState.playerInvulnerableUntil) return;
     let damage = 0;
     for (const monster of monsters) {
+        if (isTimeFreezeActive() && monster.type !== "boss") continue;
         if (Math.hypot(monster.x - player.x, monster.y - player.y) <= monster.radius + player.size / 2) {
             damage = Math.max(damage, monster.damage);
         }
@@ -409,13 +419,14 @@ function renderEnemyGuide() {
 }
 
 function drawMonsters() {
+    drawBossAttacks();
     const target = getMonsterTarget();
     for (const monster of monsters) {
         const radius = monster.radius;
         if (monster.x + radius < 0 || monster.x - radius > canvas.width
             || monster.y + radius < gameHudHeight || monster.y - radius > canvas.height) continue;
         const variant = monsterTypes[monster.type];
-        drawMonsterBody(ctx, monster, target, gameClock.elapsedMs);
+        drawMonsterBody(ctx, monster, monster.type === "boss" ? player : target, gameClock.elapsedMs);
 
         const width = Math.max(42, radius * 2 + 10);
         const x = clamp(monster.x - width / 2, 2, canvas.width - width - 2);

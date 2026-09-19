@@ -2,9 +2,10 @@ const abilityBursts = [];
 const teleportTrails = [];
 const cooldownFeedback = { until: 0 };
 
-function abilityExplosion(point, radius, damage, color = "#d8a1ff") {
+function abilityExplosion(point, radius, damage, color = "#d8a1ff", immuneType = null) {
     abilityBursts.push({ x: point.x, y: point.y, radius, color, createdAt: gameClock.elapsedMs });
     for (const monster of [...monsters]) {
+        if (monster.type === immuneType) continue;
         if (Math.hypot(monster.x - point.x, monster.y - point.y) <= radius + monster.radius) damageMonster(monster, damage);
     }
     gameAudio.play("explosion");

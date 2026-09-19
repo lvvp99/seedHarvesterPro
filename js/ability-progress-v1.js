@@ -8,11 +8,11 @@ const abilityCatalog = {
         "Sprint 140 px toward the cursor.", "Sprint up to 140 px through walls, landing on clear ground.",
         "Sprint up to 240 px through walls, landing on clear ground."] },
     timeFreeze: { name: "Time Freeze", icons: ["❄", "❅", "❆"], levels: [
-        "Freeze enemies and map scrolling for 3 seconds.", "Freeze enemies and map scrolling for 5 seconds.",
-        "Freeze enemies and map scrolling for 7 seconds."] },
+        "Freeze ordinary enemies and map scrolling for 3 seconds. Bosses are immune.", "Freeze ordinary enemies and map scrolling for 5 seconds. Bosses are immune.",
+        "Freeze ordinary enemies and map scrolling for 7 seconds. Bosses are immune."] },
     lure: { name: "Lure", icons: ["✦", "✷", "✹"], levels: [
-        "Place a lure that attracts enemies for 10 seconds.", "Attract enemies at extreme speed for 10 seconds. Walls still block them.",
-        "Keep the fast attraction and explode when the lure expires (170 px, 4× rake damage)."] },
+        "Place a lure that attracts ordinary enemies for 10 seconds. Bosses ignore it.", "Attract ordinary enemies at extreme speed for 10 seconds. Walls block them; bosses ignore it.",
+        "Keep the fast attraction and explode when the lure expires (170 px, 4× rake damage). Bosses remain immune to the lure."] },
     rakeFrenzy: { name: "Rake Frenzy", icons: ["⚡", "ϟϟ", "ϟϟϟ"], levels: [
         "Remove rake recovery for 5 seconds: one rake per click.", "For 5 seconds, throw two rakes in a spread per click with no recovery.",
         "For 5 seconds, throw three rakes in a spread per click with no recovery."] }
@@ -60,15 +60,21 @@ const abilityProgress = (() => {
                 : "Upgrade " + abilityCatalog[view.name].name + " to level " + (current + 1) + " for " + price + " coins");
         }
     }
+    function addCoins(amount) {
+        if (!Number.isSafeInteger(amount) || amount <= 0) return 0;
+        state = (storageAvailable ? read() : null) || state;
+        const gained = Math.min(amount, Number.MAX_SAFE_INTEGER - state.coins);
+        state.coins += gained;
+        save(); render();
+        return gained;
+    }
     function awardMinutes(elapsedMs) {
         const minute = Math.floor(elapsedMs / 60000);
         if (!Number.isSafeInteger(minute) || minute <= awardedMinutes) return 0;
         const earned = minute * (minute + 1) / 2 - awardedMinutes * (awardedMinutes + 1) / 2;
         if (!Number.isSafeInteger(earned)) return 0;
-        state = (storageAvailable ? read() : null) || state;
-        state.coins = Math.min(Number.MAX_SAFE_INTEGER, state.coins + earned);
         awardedMinutes = minute;
-        save(); render();
+        addCoins(earned);
         collectionEffects.push({ x: player.x, y: player.y - 35, label: "+" + earned + " coins", collectedAt: gameClock.elapsedMs });
         gameAudio.play("collect");
         return earned;
@@ -124,7 +130,7 @@ const abilityProgress = (() => {
         window.addEventListener("storage", event => { if (event.key === storageKey || event.key === null) { state = read() || state; render(); syncAbilityDurations(); updateAbilityHud(); } });
         render(); syncAbilityDurations();
     }
-    return { init, render, level, cost, purchase, awardMinutes, beginRun() { awardedMinutes = 0; }, get coins() { return state.coins; } };
+    return { init, render, level, cost, purchase, addCoins, awardMinutes, beginRun() { awardedMinutes = 0; }, get coins() { return state.coins; } };
 })();
 
 function getAbilityLevel(name) { return abilityProgress.level(name); }

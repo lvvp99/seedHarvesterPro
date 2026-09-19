@@ -879,9 +879,9 @@ test("stats update after purchases and collapse/expand without changing the game
     }
     assert.equal(game.elements.get("statSpeed").textContent, "180/s");
     assert.equal(game.elements.get("statHealth").textContent, "102 / 102");
-    assert.equal(game.elements.get("statDamage").textContent, "8.24");
-    assert.equal(game.elements.get("statBulletSpeed").textContent, "609/s");
-    assert.equal(game.elements.get("statCriticalChance").textContent, "0.35%");
+    assert.equal(game.elements.get("statDamage").textContent, "8.3");
+    assert.equal(game.elements.get("statBulletSpeed").textContent, "612/s");
+    assert.equal(game.elements.get("statCriticalChance").textContent, "0.45%");
     assert.equal(game.elements.get("statWeaponEffects").textContent, "None");
     const button = game.elements.get("statsToggle");
     button.emit("click");
@@ -902,7 +902,7 @@ test("all repeatable stats upgrades increase values and prices without casting a
    assert.equal(game.run("player.seeds"),before-cost); assert.equal(Number(b.dataset.cost),Math.ceil(cost*1.1));
    assert.equal(game.run("armedAbility"),"teleport");
  }
- assert.equal(game.run("player.maxHealth"),102); assert.equal(game.run("player.damage"),8.24);
+ assert.equal(game.run("player.maxHealth"),102); assert.equal(game.run("player.damage"),8.3);
  assert.equal(game.run("getRake().damage"),12,"basic upgrades do not change rake damage");
 });
 
@@ -950,18 +950,18 @@ test("all stats purchases apply during pause while time, actors and cooldowns re
         assert.deepEqual(game.read(snapshot), paused);
     }
     assert.equal(game.run("player.maxHealth"), 102);
-    assert.equal(game.run("player.damage"), 8.24);
-    assert.equal(game.run("player.bulletSpeed"), 10.15);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.765) < 1e-9);
-    assert.equal(game.run("player.criticalChance"), 0.0035);
+    assert.equal(game.run("player.damage"), 8.3);
+    assert.equal(game.run("player.bulletSpeed"), 10.2);
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.77) < 1e-9);
+    assert.equal(game.run("player.criticalChance"), 0.0045);
     assert.equal(game.run("player.seedMultiplier"),1.015);
     assert.equal(game.run("weaponState.nextShotAt - gameClock.elapsedMs"), 2000 / (game.run("player.fireRate") / 0.75));
     game.elements.get("pauseBtn").emit("click");
-    game.advance(1960);
+    game.advance(1940);
     assert.equal(game.run("bullets.length"), 0);
     game.advance(20);
     assert.equal(game.run("bullets.length"), 1, "resuming uses the upgraded fire rate");
-    assert.equal(game.run("bullets[0].damage"), 8.24);
+    assert.equal(game.run("bullets[0].damage"), 8.3);
 });
 
 test("all five abilities are free and ready on the first HUD click or number-key press", () => {
@@ -1199,9 +1199,9 @@ test("Fire Rate is repeatable, costs seeds, updates stats, and speeds up the pen
     button.emit("click");
     assert.equal(game.run("player.seeds"), 6);
     assert.equal(game.run("upgradeLevels.fireRate"), 1);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.765/s");
+    assert.equal(game.elements.get("statFireRate").textContent, "0.77/s");
     assert.equal(Number(button.dataset.cost), 3);
-    game.advance(1013);
+    game.advance(1006);
     assert.equal(game.run("bullets.length"), 1);
     game.advance(1);
     assert.equal(game.run("bullets.length"), 2);
@@ -1209,8 +1209,8 @@ test("Fire Rate is repeatable, costs seeds, updates stats, and speeds up the pen
     button.emit("click");
     assert.equal(game.run("player.seeds"), 3);
     assert.equal(game.run("upgradeLevels.fireRate"), 2);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.78) < 0.000001);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.78/s");
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.79) < 0.000001);
+    assert.equal(game.elements.get("statFireRate").textContent, "0.79/s");
     assert.equal(Number(button.dataset.cost), 4);
     assert.equal(button.disabled, false);
     button.emit("click");
@@ -1338,7 +1338,7 @@ test("all six enemy types, including a rushing Charger, chase a cursor-placed Lu
     game.run(`
         player.x = 900; player.y = 350; player.unlocks.lure = true;
         mouse.x = 250; mouse.y = 350; useLure();
-        Object.keys(monsterTypes).forEach((type, i) => placeMonster(type, 600, 150 + i * 85));
+        Object.keys(monsterTypes).filter(type => type !== 'boss').forEach((type, i) => placeMonster(type, 600, 150 + i * 85));
         monsters.find(m => m.type === 'charger').chargePhase = 'rush';
         updateMonsters(50);
     `);
@@ -2331,7 +2331,7 @@ test("basic attack balance favors rake damage while inexpensive upgrades still i
     assert.equal(base,6);
     game.run("player.seeds=4");
     game.elements.get("upgradeDamage").emit("click"); game.elements.get("upgradeFireRate").emit("click");
-    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.3036)<1e-8);
+    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.391)<1e-8);
     assert.equal(game.run("player.seeds"),0);
     assert.equal(game.run("getRake().damage"),12);
 });
@@ -2782,7 +2782,7 @@ test("boss death restores the world and drops loot only once; later bosses are s
     assert.equal(game.run("isBossEncounterActive()"),false);
     assert.equal(game.run("monsterState.defeated"),1);
     assert.equal(game.run("mysteryBoxes.filter(b=>b.bossDrop).length"),3);
-    assert.deepEqual(game.read("bossLootDrops.map(p=>p.kind).sort()"),["seeds","weapon"]);
+    assert.deepEqual(game.read("bossLootDrops.map(p=>p.kind).sort()"),["coins","seeds","weapon"]);
     assert.equal(game.run("player.rakeTier"),1,"weapon improves only when collected");
     game.run("const priorScroll=worldState.scroll;scrollWorld(50)");
     assert.ok(game.run("worldState.scroll>priorScroll"));
@@ -2791,6 +2791,23 @@ test("boss death restores the world and drops loot only once; later bosses are s
     game.run("gameClock.elapsedMs++;updateBossEncounter()");
     assert.equal(game.run("bossState.active.bossLevel"),10);
     assert.ok(game.run("bossState.active.maxHealth>firstBoss.maxHealth && bossState.active.damage>firstBoss.damage && bossState.active.radius>firstBoss.radius"));
+});
+
+test("a ranged boss kill drops every reward around the boss instead of near the player", () => {
+    const game = createCombatGame();
+    game.run(`player.x=230;player.y=350;queueBossForLevel(5);updateBossEncounter();
+        bossState.active.x=1000;bossState.active.y=350;
+        damageMonster(bossState.active,100000);
+        updateLootPickups([{x1:player.x,y1:player.y,x2:player.x,y2:player.y}]);`);
+    const drops = game.read("[...mysteryBoxes,...bossLootDrops]");
+    assert.equal(drops.length, 6);
+    for (const drop of drops) {
+        assert.ok(Math.hypot(drop.x-1000,drop.y-350)<160, "reward remains near the defeated boss");
+        assert.ok(Math.hypot(drop.x-230,drop.y-350)>500, "reward does not move toward the player");
+    }
+    assert.equal(game.run("isMysteryChoiceOpen()"), false);
+    assert.equal(game.run("player.rakeTier"), 1);
+    assert.equal(game.run("abilityProgress.coins"), 0);
 });
 
 test("boss spawning bypasses the regular population cap, stays bounded after knockback and resize", () => {
@@ -2919,7 +2936,7 @@ test("three boss mystery boxes each survive reward selection and expire after fi
 test("boss jackpot and weapon drops wait for pickup and can each be claimed only once", () => {
     const game = createCombatGame();
     game.run("player.seeds=0;player.xp=17;dropBossLoot(2,player);mysteryBoxes.length=0");
-    assert.equal(game.run("bossLootDrops.length"), 2);
+    assert.equal(game.run("bossLootDrops.length"), 3);
     assert.deepEqual(game.read("({level:player.level,xp:player.xp,tier:player.rakeTier,seeds:player.seeds})"), { level: 1, xp: 17, tier: 1, seeds: 0 });
     game.run(`for(const drop of bossLootDrops)Object.assign(drop,{x:player.x,y:player.y});
         const dropPath=[{x1:player.x,y1:player.y,x2:player.x,y2:player.y}];
@@ -2941,4 +2958,479 @@ test("expanded mystery rerolls exclude owned rake effects and do not repeat the 
         assert.equal(game.run("player.seeds"), seeds - cost);
         previous = current;
     }
+});
+
+
+test("every repeatable stat has a Max control matching sequential rounded-price purchases", () => {
+    const reference = createCombatGame();
+    const upgrades = reference.read("Object.entries(statsUpgrades).filter(([,value])=>value.repeatable).map(([name,value])=>({name,id:value.button.id}))");
+    assert.equal(upgrades.length, 13);
+    for (const { name, id } of upgrades) {
+        const bulk = createCombatGame(), single = createCombatGame();
+        for (const game of [bulk, single]) game.run(`
+            player.seeds=4321; player.health=37; gameClock.elapsedMs=1000;
+            weaponState.nextShotAt=2400;
+            for(const state of Object.values(abilityState)) state.lastUsedAt=0;
+            updateStatsPanel();
+        `);
+        const maximum = bulk.elements.get(id + "Max");
+        assert.ok(maximum, name);
+        assert.equal(maximum.getAttribute("aria-disabled"), "false");
+        assert.match(maximum.getAttribute("aria-label"), /Buy maximum .* upgrades: \d+ for \d+ seeds/);
+        maximum.emit("click");
+        single.run(`while(player.seeds >= statsUpgrades[${JSON.stringify(name)}].cost) purchaseUpgrade(${JSON.stringify(name)})`);
+        for (const expression of [`player.seeds`, `upgradeLevels[${JSON.stringify(name)}]`, `statsUpgrades[${JSON.stringify(name)}].cost`]) {
+            assert.equal(bulk.run(expression), single.run(expression), name + ": " + expression);
+        }
+        assert.ok(bulk.run(`player.seeds < statsUpgrades[${JSON.stringify(name)}].cost`));
+        assert.equal(maximum.getAttribute("aria-disabled"), "true");
+        for (const expression of ["player.health", "player.maxHealth", "player.speed", "player.damage", "player.bulletSpeed", "player.fireRate", "player.criticalChance", "player.seedMultiplier", "weaponState.nextShotAt", ...bulk.read("Object.keys(abilityState)").map(ability => `abilityState.${ability}.cooldownMs`), ...bulk.read("Object.keys(abilityState)").map(ability => `getCooldownRemainingMs('${ability}')`)]) {
+            assert.ok(Math.abs(bulk.run(expression) - single.run(expression)) < 1e-8, name + ": " + expression);
+        }
+    }
+});
+
+test("Max quotes exact budgets and one bulk purchase produces one sound and one stats refresh", () => {
+    const game = createCombatGame();
+    for (const budget of [0, 1, 2, 4, 5, 8, 9, 13, 14, 20, 100, 10000]) {
+        let remaining = budget, cost = 2, count = 0;
+        while (remaining >= cost) { remaining -= cost; count++; cost = Math.ceil(cost * 1.1); }
+        const quote = game.read(`player.seeds=${budget}; getUpgradePurchase(statsUpgrades.damage,true)`);
+        assert.deepEqual(quote, { count, remainingSeeds: remaining, nextCost: cost, spent: budget - remaining });
+    }
+    game.run(`
+        player.seeds=20;
+        const maxSounds=[]; gameAudio.play=name=>maxSounds.push(name);
+        let maxRefreshes=0; const originalMaxRefresh=updateStatsPanel;
+        updateStatsPanel=()=>{maxRefreshes++; originalMaxRefresh();};
+    `);
+    game.elements.get("upgradeDamageMax").emit("click");
+    assert.deepEqual(game.read("maxSounds"), ["purchase"]);
+    assert.equal(game.run("maxRefreshes"), 1);
+    assert.equal(game.run("upgradeLevels.damage"), 5);
+    assert.equal(game.run("player.seeds"), 0);
+    assert.equal(game.run("statsUpgrades.damage.cost"), 7);
+    assert.equal(game.elements.get("upgradeDamage").textContent, "7");
+    assert.equal(game.elements.get("upgradeDamage").getAttribute("aria-disabled"), "true");
+});
+
+test("Max remains available during manual pause and preserves pending shots and cooldown progress", () => {
+    const game = createCombatGame();
+    game.run("player.seeds=1000; weaponState.nextShotAt=2000; abilityState.teleport.lastUsedAt=0;");
+    game.advance(1000); game.key(" ");
+    const before = game.read("({time:gameClock.elapsedMs,x:player.x,y:player.y,rate:player.fireRate,remaining:weaponState.nextShotAt-gameClock.elapsedMs,fraction:getCooldownRemainingMs('teleport')/abilityState.teleport.cooldownMs})");
+    game.elements.get("upgradeFireRateMax").emit("click");
+    const newRate = game.run("player.fireRate");
+    assert.ok(newRate > before.rate);
+    assert.ok(Math.abs(game.run("weaponState.nextShotAt-gameClock.elapsedMs") - before.remaining * before.rate / newRate) < 1e-8);
+    game.run("player.seeds=1000;"); game.elements.get("upgradeCooldown-teleportMax").emit("click");
+    assert.ok(Math.abs(game.run("getCooldownRemainingMs('teleport')/abilityState.teleport.cooldownMs") - before.fraction) < 1e-8);
+    game.advance(60000);
+    assert.equal(game.run("gameClock.paused"), true);
+    assert.deepEqual(game.read("({time:gameClock.elapsedMs,x:player.x,y:player.y})"), {time:before.time,x:before.x,y:before.y});
+});
+
+test("Max cannot spend before play, without funds, inside choice or guide dialogs, while hidden, or after game over", () => {
+    for (const state of ["before", "poor", "choice", "guide", "hidden", "over"]) {
+        const game = state === "before" ? createGame() : createCombatGame();
+        game.run("player.seeds=100;");
+        if (state === "poor") game.run("player.seeds=1");
+        if (state === "choice") game.run("openMysteryChoice()");
+        if (state === "guide") game.run("openAbilityGuide()");
+        if (state === "hidden") { game.document.hidden = true; game.document.emit("visibilitychange"); }
+        if (state === "over") game.run("endGame()");
+        game.run("updateStatsPanel()");
+        const before = game.read("({seeds:player.seeds,damage:player.damage,level:upgradeLevels.damage,cost:statsUpgrades.damage.cost})");
+        const button = game.elements.get("upgradeDamageMax");
+        assert.equal(button.getAttribute("aria-disabled"), "true", state);
+        button.emit("click");
+        assert.deepEqual(game.read("({seeds:player.seeds,damage:player.damage,level:upgradeLevels.damage,cost:statsUpgrades.damage.cost})"), before, state);
+    }
+});
+
+test("Max has no upgrade cap and later seed income enables further bulk upgrades", () => {
+    const game = createCombatGame();
+    game.run("player.seeds=1000000000; player.health=35; purchaseUpgrade('maxHealth',true)");
+    const count = game.run("upgradeLevels.maxHealth");
+    assert.ok(count > 100);
+    assert.equal(game.run("player.maxHealth"), 100 + count * 2);
+    assert.equal(game.run("player.health"), 35 + count * 2);
+    game.run("player.seeds+=1000000000; updateStatsPanel()");
+    assert.equal(game.elements.get("upgradeMaxHealthMax").getAttribute("aria-disabled"), "false");
+    game.elements.get("upgradeMaxHealthMax").emit("click");
+    assert.ok(game.run("upgradeLevels.maxHealth") > count);
+    assert.ok(game.run("player.seeds < statsUpgrades.maxHealth.cost"));
+});
+
+
+test("boss coin drops roll inclusive 1–10 amounts and only enter the permanent wallet once collected", () => {
+    for (const [random, amount] of [[0, 1], [0.999999, 10]]) {
+        const storage = abilitySave(27, { teleport: 2 });
+        const game = createCombatGame({ storage });
+        game.run(`Math.random=()=>${random};dropBossLoot(1,player);mysteryBoxes.length=0;
+            const coin=bossLootDrops.find(drop=>drop.kind==='coins');
+            for(const drop of bossLootDrops)Object.assign(drop,{x:1000,y:500});
+            coin.x=player.x;coin.y=player.y;
+            const coinPath=[{x1:player.x,y1:player.y,x2:player.x,y2:player.y}];`);
+        assert.equal(game.run("coin.coins"), amount);
+        assert.equal(game.run("abilityProgress.coins"), 27);
+        assert.equal(game.run("bossLootDrops.filter(drop=>drop.kind==='coins').length"), 1);
+        game.key(" "); game.run("updateLootPickups(coinPath)");
+        assert.equal(game.run("abilityProgress.coins"), 27, "pause cannot collect coins");
+        game.key(" "); game.run("updateLootPickups(coinPath);updateLootPickups(coinPath)");
+        assert.equal(game.run("abilityProgress.coins"), 27 + amount);
+        assert.equal(game.run("bossLootDrops.filter(drop=>drop.kind==='coins').length"), 0);
+        assert.equal(game.elements.get("hudCoins").textContent, String(27 + amount));
+        const next = createCombatGame({ storage });
+        assert.equal(next.run("abilityProgress.coins"), 27 + amount);
+        assert.equal(next.run("getAbilityLevel('teleport')"), 2);
+    }
+});
+
+test("boss coin drops survive pending placement and wait safely outside the death zone", () => {
+    const game = createCombatGame();
+    game.run("canvas.width=40;canvas.height=gameHudHeight+40;dropBossLoot(1,player)");
+    assert.equal(game.run("mysteryBoxes.length+bossLootDrops.length"), 6);
+    assert.equal(game.run("bossLootDrops.find(drop=>drop.kind==='coins').pending"), true);
+    const amount = game.run("bossLootDrops.find(drop=>drop.kind==='coins').coins");
+    game.run("canvas.width=1280;canvas.height=720;resizeLootPickups();updateLootPickups([])");
+    assert.equal(game.run("bossLootDrops.find(drop=>drop.kind==='coins').pending"), false);
+    game.run("const savedCoin=bossLootDrops.find(drop=>drop.kind==='coins');savedCoin.x=-200;gameClock.elapsedMs+=60000;updateLootPickups([])");
+    assert.equal(game.run("savedCoin.coins"), amount);
+    assert.ok(game.run("savedCoin.x>=getDeathZoneWidth()+35"));
+    assert.equal(game.run("abilityProgress.coins"), 0);
+    game.drawing.length = 0; game.run("drawLootPickups()");
+    assert.ok(game.drawing.some(call => call.name === "fillText" && call.args[0] === "+" + amount + (amount === 1 ? " COIN" : " COINS")));
+});
+
+test("coin wallet additions coexist with minute rewards, retain saved levels, and handle unavailable storage", () => {
+    const storage = abilitySave(10, { dash: 2 });
+    const game = createCombatGame({ storage });
+    assert.equal(game.run("abilityProgress.awardMinutes(60000)"), 1);
+    assert.equal(game.run("abilityProgress.addCoins(7)"), 7);
+    assert.equal(game.run("abilityProgress.awardMinutes(120000)"), 2);
+    assert.equal(game.run("abilityProgress.awardMinutes(120000)"), 0);
+    assert.equal(game.run("abilityProgress.coins"), 20);
+    storage.set("seedHarvester.abilityProgress.v1", JSON.stringify({ coins: 22, levels: { dash: 3 } }));
+    assert.equal(game.run("abilityProgress.addCoins(3)"), 3);
+    assert.deepEqual(game.read("({coins:abilityProgress.coins,dash:getAbilityLevel('dash')})"), { coins: 25, dash: 3 });
+    for (const amount of [0, -1, 1.5, Infinity, NaN]) {
+        assert.equal(game.run(`abilityProgress.addCoins(${String(amount)})`), 0);
+    }
+    assert.equal(game.run("abilityProgress.coins"), 25);
+    const blocked = createCombatGame({ storageBlocked: true });
+    assert.equal(blocked.run("abilityProgress.addCoins(4);abilityProgress.awardMinutes(60000);abilityProgress.coins"), 5);
+});
+
+test("mystery rewards restart at defaults and omit redundant duration labels", () => {
+    const storage = abilitySave(65, { lure: 3, dash: 2 });
+    const game = createCombatGame({ storage });
+    const snapshot = `({maxHealth:player.maxHealth,damage:player.damage,speed:player.speed,fireRate:player.fireRate,
+        bulletSpeed:player.bulletSpeed,criticalChance:player.criticalChance,seedMultiplier:player.seedMultiplier,
+        rakeTier:player.rakeTier,rakeDamageMultiplier:player.rakeDamageMultiplier,unlocks:player.unlocks,
+        bonuses:mysteryBonuses,rakeCooldown:rakeState.cooldownMs,
+        abilityCooldowns:Object.fromEntries(Object.entries(abilityState).map(([id,state])=>[id,state.cooldownMs]))})`;
+    const defaults = game.read(snapshot);
+    game.run("player.health=40;hayStacks.push({x:800,y:350,seeds:20});placeMonster('brute',900,350);abilityState.teleport.lastUsedAt=gameClock.elapsedMs");
+    assert.equal(game.run("getMysteryBonuses().some(card=>/for this run/i.test(card.kind+' '+card.description))"), false);
+    game.run("for(const card of getMysteryBonuses())card.apply()");
+    assert.notDeepEqual(game.read(snapshot), defaults);
+    const next = createCombatGame({ storage });
+    assert.deepEqual(next.read(snapshot), defaults);
+    assert.deepEqual(next.read("({coins:abilityProgress.coins,lure:getAbilityLevel('lure'),dash:getAbilityLevel('dash')})"), { coins: 65, lure: 3, dash: 2 });
+});
+
+test("boss fights stop survival time, difficulty, history and minute coins while combat clocks advance", () => {
+    const storage = new Map(), game = createCombatGame({ storage });
+    game.advance(59000);
+    const difficulty = game.read("getMonsterDifficulty()");
+    const scrollSpeed = game.run("getScrollSpeed()");
+    game.run("queueBossForLevel(5);updateBossEncounter();bossState.nextAttackAt=Infinity;monsterState.playerInvulnerableUntil=Infinity;useEnergyShield()");
+    const before = game.read("({x:bossState.active.x,y:bossState.active.y})");
+    game.advance(60000);
+    assert.equal(game.run("gameClock.elapsedMs"), 119000);
+    assert.equal(game.run("getSurvivalTime()"), 59000);
+    assert.equal(game.elements.get("gameTime").textContent, "00:59");
+    assert.equal(game.elements.get("timeLabel").textContent, "Time · Held");
+    assert.equal(game.run("isEnergyShieldActive()"), false);
+    assert.equal(game.run("getCooldownRemainingMs('energyShield')"), 0);
+    assert.equal(game.run("abilityProgress.coins"), 0);
+    assert.notDeepEqual(game.read("({x:bossState.active.x,y:bossState.active.y})"), before);
+    assert.deepEqual(game.read("getMonsterDifficulty()"), difficulty);
+    assert.equal(game.run("getScrollSpeed()"), scrollSpeed);
+    assert.equal(JSON.parse(storage.get("seedHarvester.survivalHistory.v1")).bestMs, 59000);
+    game.key(" "); game.advance(15000);
+    assert.equal(game.run("gameClock.elapsedMs"), 119000);
+    game.key(" ");
+    game.run("damageMonster(bossState.active,100000);mysteryBoxes.length=0;bossLootDrops.length=0;monsterState.nextSpawnAt=Infinity");
+    game.advance(1000);
+    assert.equal(game.run("getSurvivalTime()"), 60000);
+    assert.equal(game.elements.get("gameTime").textContent, "01:00");
+    assert.equal(game.run("abilityProgress.coins"), 1);
+    assert.equal(game.elements.get("timeLabel").textContent, "Time");
+    game.run("endGame()");
+    assert.equal(JSON.parse(storage.get("seedHarvester.survivalHistory.v1")).bestMs, 60000);
+});
+
+test("dying or leaving during a boss records only survival time outside the encounter", () => {
+    const storage = new Map(), game = createCombatGame({ storage });
+    game.advance(2500);
+    game.run("queueBossForLevel(5);updateBossEncounter();bossState.nextAttackAt=Infinity;monsterState.playerInvulnerableUntil=Infinity");
+    game.advance(20000);
+    game.document.hidden = true; game.document.emit("visibilitychange");
+    game.advance(90000); game.window.emit("pagehide");
+    assert.equal(JSON.parse(storage.get("seedHarvester.survivalHistory.v1")).recent[0].elapsedMs, 2500);
+    game.document.hidden = false; game.document.emit("visibilitychange");
+    game.advance(3000); game.run("endGame()");
+    const record = JSON.parse(storage.get("seedHarvester.survivalHistory.v1")).recent[0];
+    assert.equal(record.elapsedMs, 2500); assert.equal(record.completed, true);
+    assert.equal(game.elements.get("gameOverTime").textContent, "00:02");
+});
+
+test("boss immunity includes level-three lure explosions but leaves teleport damage effective", () => {
+    const game = createCombatGame({ storage: abilitySave(0, { lure: 3, teleport: 2 }) });
+    game.run(`queueBossForLevel(5);updateBossEncounter();
+        bossState.active.x=700;bossState.active.y=350;
+        mouse.x=700;mouse.y=350;useLure();
+        const prey=placeMonster('crawler',700,350);
+        gameClock.elapsedMs=abilityState.lure.activeUntil;updateLure();`);
+    assert.equal(game.run("bossState.active.health"), 800);
+    assert.equal(game.run("monsters.includes(prey)"), false);
+    game.run(`abilityState.lure.lastUsedAt=-Infinity;useLure();
+        abilityState.lure.lastUsedAt=-Infinity;useLure();`);
+    assert.equal(game.run("bossState.active.health"), 800, "replacing a level-three lure cannot damage the boss");
+    game.run("leaveTeleportEffects({x:700,y:350},{x:900,y:350})");
+    assert.equal(game.run("bossState.active.health"), 764);
+});
+
+function createBossAttackGame() {
+    const game = createCombatGame();
+    game.run(`
+        queueBossForLevel(5); updateBossEncounter();
+        const attackBoss = bossState.active;
+        gameClock.elapsedMs = 10000;
+        attackBoss.x = 300; attackBoss.y = 350; attackBoss.moveAfter = 0;
+        bossState.nextAttackAt = Infinity;
+        player.x = 600; player.y = 350;
+        monsterState.playerInvulnerableUntil = 0;
+        function advanceBossAttack(age, delta = 50) {
+            gameClock.elapsedMs = bossState.attack.startedAt + bossState.attack.windupMs + age;
+            updateBossAttacks(delta);
+        }
+    `);
+    return game;
+}
+
+test("boss ignores Lure and Time Freeze while ordinary monsters still obey both", () => {
+    const game = createBossAttackGame();
+    game.run(`
+        attackBoss.x = 800; player.x = 200;
+        const lureVictim = placeMonster('crawler', 600, 500);
+        abilityState.lure.point = {x:1100,y:350};
+        abilityState.lure.castLevel = 3; abilityState.lure.activeUntil = 30000;
+        updateMonsters(50);
+    `);
+    assert.ok(game.run("attackBoss.x < 800"));
+    assert.ok(game.run("lureVictim.x > 600"));
+    const before = game.read("({boss:attackBoss.x,normal:lureVictim.x,y:lureVictim.y})");
+    game.run("abilityState.timeFreeze.activeUntil = 30000; updateMonsters(50);");
+    assert.ok(game.run("attackBoss.x") < before.boss);
+    assert.equal(game.run("lureVictim.x"), before.normal);
+    assert.equal(game.run("lureVictim.y"), before.y);
+    game.run("attackBoss.x=player.x; attackBoss.y=player.y; updateMonsterContact();");
+    assert.equal(game.run("player.health"), 72);
+    game.run(`
+        attackBoss.x = 1000; lureVictim.x = player.x; lureVictim.y = player.y;
+        monsterState.playerInvulnerableUntil = 0; updateMonsterContact();
+    `);
+    assert.equal(game.run("player.health"), 72);
+});
+
+for (const [type, amount, position] of [
+    ["shockwave", 24, "player.x=430; advanceBossAttack(500);"],
+    ["volley", 18, "player.x=369; advanceBossAttack(1);"],
+    ["meteors", 29, "advanceBossAttack(1);"],
+    ["beam", 26, "advanceBossAttack(550);"],
+    ["charge", 34, "player.x=550; advanceBossAttack(300);"]
+]) {
+    test(`boss ${type} visibly warns before its distinct attack and can damage the player`, () => {
+        const game = createBossAttackGame();
+        game.run(`beginBossAttack('${type}'); drawBossAttacks(); advanceBossAttack(-1);`);
+        assert.equal(game.run("player.health"), 100);
+        assert.equal(game.run("bossState.attack.launched"), false);
+        assert.ok(game.drawing.some(call => call.name === "fillText" && call.args[0] === game.run(`bossAttackLabels['${type}']`)));
+        game.run(position);
+        assert.equal(game.run("player.health"), 100 - amount);
+        assert.equal(game.run("bossState.attack.launched"), true);
+        if (type === "charge") {
+            assert.ok(game.run("attackBoss.x > bossState.attack.x && attackBoss.x < bossState.attack.endX"));
+            assert.equal(game.run("attackBoss.y"), 350);
+        }
+        game.run("advanceBossAttack(bossState.attack.durationMs + 1);");
+        assert.equal(game.run("bossState.attack"), null);
+    });
+}
+
+test("boss attacks retain safe exits around the double ring gap, marked circles, beam sweep, volley and charge", () => {
+    for (const type of ["shockwave", "volley", "meteors", "beam", "charge"]) {
+        const game = createBossAttackGame();
+        game.run(`beginBossAttack('${type}'); player.x=300;player.y=560;`);
+        if (type === "shockwave") game.run("player.x=300+Math.cos(bossState.attack.gapAngle)*210;player.y=350+Math.sin(bossState.attack.gapAngle)*210");
+        if (type === "meteors") game.run("player.x=100;player.y=600");
+        // Use real short updates so secondary bursts and meteor warnings are exercised too.
+        game.run(`const dodgeStart=bossState.attack.startedAt+bossState.attack.windupMs;
+            for(let age=0;bossState.attack && age<4000;age+=25){
+                gameClock.elapsedMs=dodgeStart+age;updateBossAttacks(25);
+                if('${type}'==='meteors' && age===475){player.x=300;player.y=100;}
+                if('${type}'==='volley' && age===250){player.x=100;player.y=350;}
+                if('${type}'==='volley' && age===950){player.x=300;player.y=100;}
+            }`);
+        assert.equal(game.run("player.health"), 100, type);
+    }
+});
+
+test("boss attack defenses respect armor, shield, invulnerability, pause and time-freeze immunity", () => {
+    const game = createBossAttackGame();
+    game.run(`
+        beginBossAttack('beam');
+        abilityState.timeFreeze.activeUntil=30000;
+        manuallyPaused=true; updateGamePauseState();
+        advanceBossAttack(1);
+    `);
+    assert.equal(game.run("bossState.attack.launched"), false);
+    assert.equal(game.run("player.health"), 100);
+    game.run(`
+        manuallyPaused=false; updateGamePauseState();
+        abilityState.energyShield.activeUntil=30000; advanceBossAttack(520);
+    `);
+    assert.equal(game.run("bossState.attack.launched"), true);
+    assert.equal(game.run("player.health"), 100);
+    game.run("abilityState.energyShield.activeUntil=0; monsterState.playerInvulnerableUntil=30000; advanceBossAttack(530);");
+    assert.equal(game.run("player.health"), 100);
+    game.run("monsterState.playerInvulnerableUntil=0; mysteryBonuses.armor=1; advanceBossAttack(540);");
+    assert.equal(game.run("player.health"), 87);
+    game.run("advanceBossAttack(550);");
+    assert.equal(game.run("player.health"), 87);
+});
+
+test("boss cycles all five attacks, scales their pressure, and removes hazards at death", () => {
+    const game = createBossAttackGame();
+    game.run("abilityState.energyShield.activeUntil=Infinity;");
+    const types = [];
+    for (let i = 0; i < 5; i++) {
+        game.run("beginBossAttack();");
+        types.push(game.run("bossState.attack.type"));
+        game.run("advanceBossAttack(bossState.attack.durationMs+1);");
+    }
+    assert.deepEqual(types, ["shockwave", "volley", "meteors", "beam", "charge"]);
+    game.run("attackBoss.bossStage=2; beginBossAttack('volley'); advanceBossAttack(1);");
+    assert.equal(game.run("bossState.attack.damageScale"), 1.12);
+    assert.ok(game.run("bossState.attack.projectiles.length") > 0);
+    game.run("damageMonster(attackBoss, attackBoss.health);");
+    assert.equal(game.run("bossState.attack"), null);
+    assert.equal(game.run("bossState.nextAttackAt"), Infinity);
+    const health = game.run("player.health");
+    game.run("abilityState.energyShield.activeUntil=0; updateBossAttacks(50); drawBossAttacks();");
+    assert.equal(game.run("player.health"), health);
+});
+
+test("boss pursuit is much faster, continues through ranged barrages, and leaves only short recovery windows", () => {
+    const game = createBossAttackGame();
+    assert.equal(game.run("attackBoss.speed"), 138);
+    game.run("updateMonsters(50)");
+    assert.ok(Math.abs(game.run("attackBoss.x") - 306.9) < 1e-8);
+    for (const type of ["meteors", "volley"]) {
+        game.run(`attackBoss.x=300;attackBoss.y=350;player.x=800;player.y=350;
+            beginBossAttack('${type}');`);
+        if (type === "volley") game.run("advanceBossAttack(0)");
+        game.run("updateMonsters(50)");
+        assert.ok(game.run("attackBoss.x > 300"), type);
+    }
+    for (const type of ["shockwave", "beam", "charge"]) {
+        game.run(`attackBoss.x=300;beginBossAttack('${type}');updateMonsters(50)`);
+        assert.equal(game.run("attackBoss.x"), 300, "stationary telegraph: " + type);
+    }
+    game.run("abilityState.energyShield.activeUntil=Infinity;advanceBossAttack(bossState.attack.durationMs+1)");
+    assert.equal(game.run("bossState.nextAttackAt-gameClock.elapsedMs"), 750);
+    game.run("attackBoss.bossStage=10;beginBossAttack('charge');");
+    assert.equal(game.run("bossState.attack.durationMs"), 288);
+    assert.ok(game.run("bossState.attack.windupMs < 650 && bossState.attack.windupMs >= 520"));
+    game.run("advanceBossAttack(bossState.attack.durationMs+1)");
+    assert.ok(game.run("bossState.nextAttackAt-gameClock.elapsedMs < 510"));
+    game.run("damageMonster(attackBoss,attackBoss.health);gameClock.elapsedMs+=4500;queueBossForLevel(10);updateBossEncounter()");
+    assert.equal(game.run("bossState.active.speed"), 146);
+    assert.ok(game.run("bossState.active.moveAfter >= bossState.introStartedAt + bossState.introDurationMs"), "arrival banner never conceals a moving boss");
+});
+
+test("volley fires three faster, separately aimed bursts and preserves each fresh aim warning", () => {
+    const game = createBossAttackGame();
+    game.run("abilityState.energyShield.activeUntil=Infinity;beginBossAttack('volley');advanceBossAttack(0)");
+    assert.equal(game.run("bossState.attack.count"), 9);
+    assert.equal(game.run("bossState.attack.projectiles.length"), 9);
+    assert.equal(game.run("bossState.attack.burstsFired"), 1);
+    assert.equal(game.run("bossState.attack.speed"), 340);
+    game.run("player.x=300;player.y=600;advanceBossAttack(200)");
+    assert.equal(game.run("bossState.attack.burstAngle"), Math.PI / 2);
+    game.run("player.x=600;player.y=350;advanceBossAttack(699)");
+    assert.equal(game.run("bossState.attack.burstsFired"), 1);
+    game.run("advanceBossAttack(700)");
+    assert.equal(game.run("bossState.attack.burstsFired"), 2);
+    assert.equal(game.run("bossState.attack.burstAngle"), Math.PI / 2, "locked warning direction matches the shot");
+    game.run("player.x=100;advanceBossAttack(900);advanceBossAttack(1400)");
+    assert.equal(game.run("bossState.attack.burstsFired"), 3);
+    assert.equal(game.run("bossState.attack.burstAngle"), Math.PI);
+
+    const delayed = createBossAttackGame();
+    delayed.run("beginBossAttack('volley');advanceBossAttack(0);advanceBossAttack(600);advanceBossAttack(700)");
+    assert.equal(delayed.run("bossState.attack.burstsFired"), 1, "a delayed frame cannot remove a new warning");
+    delayed.run("advanceBossAttack(1100)");
+    assert.equal(delayed.run("bossState.attack.burstsFired"), 2);
+});
+
+test("meteor follow-up warns at the player's new location before striking and pauses with the game", () => {
+    const game = createBossAttackGame();
+    game.run("beginBossAttack('meteors');player.x=200;player.y=600;advanceBossAttack(450)");
+    assert.equal(game.run("bossState.attack.markers.length"), 8);
+    assert.deepEqual(game.read("({x:bossState.attack.markers[5].x,y:bossState.attack.markers[5].y,delay:bossState.attack.markers[5].delay})"), { x: 200, y: 600, delay: 1150 });
+    assert.equal(game.run("player.health"), 100);
+    game.run("advanceBossAttack(1149)");
+    assert.equal(game.run("player.health"), 100);
+    game.run("manuallyPaused=true;updateGamePauseState();advanceBossAttack(1150)");
+    assert.equal(game.run("bossState.attack.markers[5].struck"), false);
+    game.run("manuallyPaused=false;updateGamePauseState();advanceBossAttack(1150)");
+    assert.equal(game.run("player.health"), 71);
+});
+
+test("beam sweeps the previewed arc while fast charge preserves continuous collision and map bounds", () => {
+    const game = createBossAttackGame();
+    game.run("beginBossAttack('beam');advanceBossAttack(0)");
+    assert.equal(game.run("player.health"), 100);
+    assert.ok(game.run("bossState.attack.endY < 350"));
+    game.run("advanceBossAttack(550);drawBossAttacks()");
+    assert.equal(game.run("player.health"), 74);
+    assert.ok(Math.abs(game.run("bossState.attack.endY") - 350) < 1e-8);
+    game.run("advanceBossAttack(1000)");
+    assert.ok(game.run("bossState.attack.endY > 350"));
+
+    const charge = createBossAttackGame();
+    charge.run("player.x=600;beginBossAttack('charge')");
+    assert.equal(charge.run("bossState.attack.endX-bossState.attack.x"), 680);
+    assert.equal(charge.run("bossState.attack.durationMs"), 360);
+    charge.run("advanceBossAttack(350)");
+    assert.equal(charge.run("player.health"), 66, "fast motion cannot skip a player between its endpoints");
+    assert.ok(charge.run("attackBoss.x > player.x && attackBoss.x+attackBoss.radius <= canvas.width"));
+});
+
+test("double shockwave draws and collides with both advancing rings without stacking damage in invulnerability", () => {
+    const game = createBossAttackGame();
+    game.run("beginBossAttack('shockwave');advanceBossAttack(500)");
+    assert.equal(game.run("bossState.attack.rings.length"), 2);
+    assert.equal(game.run("bossState.attack.endRadius"), 760);
+    assert.ok(game.run("bossState.attack.rings[0].radius > bossState.attack.rings[1].radius"));
+    assert.equal(game.run("player.health"), 76);
+    game.run("advanceBossAttack(1000);drawBossAttacks()");
+    assert.equal(game.run("player.health"), 76);
+    assert.equal(game.run("bossState.attack.rings.every(ring=>ring.hit)"), true);
+    const activeRings = game.drawing.filter(call => call.name === "arc" && call.args[0] === 300 && call.args[1] === 350);
+    assert.equal(activeRings.length, 2);
 });

@@ -8,7 +8,7 @@ const worldState = {
 };
 
 function getScrollSpeed() {
-    return Math.min(worldSettings.maxSpeed, worldSettings.baseSpeed + Math.floor(gameClock.elapsedMs / 30000) * 4);
+    return Math.min(worldSettings.maxSpeed, worldSettings.baseSpeed + Math.floor(getSurvivalTime() / 30000) * 4);
 }
 
 function getDeathZoneWidth() {
