@@ -38,7 +38,7 @@ const statsPanel = document.getElementById("statsPanel");
 const statsToggle = document.getElementById("statsToggle");
 const statsContent = document.getElementById("statsContent");
 const statsDragHandle = document.getElementById("statsDragHandle");
-const statsPosition = { x: 10, y: null, drag: null };
+const statsPosition = { x: 4, y: null, drag: null };
 const statFields = {
     health: document.getElementById("statHealth"),
     speed: document.getElementById("statSpeed"),
@@ -54,7 +54,7 @@ const statFields = {
 const upgradeButtons = [...document.querySelectorAll(".statUpgradeButton")];
 const statsUpgrades = Object.fromEntries(upgradeButtons.map(button => [button.dataset.upgrade, {
     button, cost: Number(button.dataset.cost), repeatable: button.dataset.repeatable === "true",
-    label: ({maxHealth:"Maximum Health",damage:"Basic attack damage",bulletSpeed:"Basic attack speed",fireRate:"Basic attack fire rate",criticalChance:"Basic attack critical chance",piercingRound:"Piercing Round",knockback:"Knockback",explosiveKernel:"Explosive Kernel"})[button.dataset.upgrade]
+    label: button.dataset.label || ({maxHealth:"Maximum Health",damage:"Basic attack damage",bulletSpeed:"Basic attack speed",fireRate:"Basic attack fire rate",criticalChance:"Basic attack critical chance",piercingRound:"Piercing Round",knockback:"Knockback",explosiveKernel:"Explosive Kernel"})[button.dataset.upgrade]
 }]));
 
 const abilityHud = {
@@ -78,6 +78,7 @@ const abilityHud = {
         cooldownText: document.getElementById("timeFreezeCooldownText")
     },
 
+    rakeFrenzy: { item: document.getElementById("abilityRakeFrenzy"), cooldownText: document.getElementById("rakeFrenzyCooldownText") },
     lure: {
         item: document.getElementById("abilityLure"),
         cooldownText: document.getElementById("lureCooldownText")
@@ -115,9 +116,9 @@ const player = {
     xp: 0,
     totalXp: 0,
 
-    damage: 10,
+    damage: 8,
     bulletSpeed: 10,
-    fireRate: 0.5,
+    fireRate: 0.75,
     criticalChance: 0,
 
 
@@ -126,30 +127,26 @@ const player = {
         piercingRound: false,
         knockback: false,
         explosiveKernel: false,
+        ricochet: false,
 
         teleport: true,
         energyShield: true,
         dash: true,
         timeFreeze: true,
-        lure: true
+        lure: true,
+        rakeFrenzy: true
 
     }
 
 };
 
 
-const upgradeLevels = {
-
-    maxHealth: 0,
-    damage: 0,
-    bulletSpeed: 0,
-    fireRate: 0,
-    criticalChance: 0
-
-};
+const upgradeLevels = Object.fromEntries(Object.entries(statsUpgrades).filter(([, upgrade]) => upgrade.repeatable).map(([name]) => [name, 0]));
+const upgradeRates = { moveSpeed: 0.10, damage: 0.08, bulletSpeed: 0.05, fireRate: 0.05, criticalChance: 0.01, cooldown: 0.02 };
 
 
 const abilityState = {
+    rakeFrenzy: { cooldownMs: 45000, lastUsedAt: -Infinity, durationMs: 5000, activeUntil: 0 },
 
     teleport: {
         cooldownMs: 5000,
@@ -188,12 +185,15 @@ const abilityState = {
 
 };
 
+for (const state of Object.values(abilityState)) state.baseCooldownMs = state.cooldownMs;
+
 let armedAbility = null;
-const abilityLabels = { teleport: "Teleport", energyShield: "Energy Shield", dash: "Dash", timeFreeze: "Time Freeze", lure: "Lure" };
-const instantAbilities = new Set(["energyShield", "timeFreeze"]);
+const abilityLabels = { teleport: "Teleport", energyShield: "Energy Shield", dash: "Dash", timeFreeze: "Time Freeze", lure: "Lure", rakeFrenzy: "Rake Frenzy" };
+const instantAbilities = new Set(["energyShield", "timeFreeze", "rakeFrenzy"]);
 const abilityInstructions = {
+    rakeFrenzy: "Throw rakes with no recovery for 5 seconds. Click rapidly!",
     teleport: "Left-click to teleport to the marker.", energyShield: "Instantly shield yourself for 2 seconds.",
-    dash: "Left-click to sprint towards the cursor.", timeFreeze: "Instantly freeze all enemies for 3 seconds.",
+    dash: "Left-click to sprint towards the cursor.", timeFreeze: "Instantly freeze enemies and map scrolling for 3 seconds.",
     lure: "Left-click on open ground to plant a lure at the cursor for 10 seconds."
 };
 const dashTrail = [];
@@ -380,8 +380,8 @@ function updateGameClock(now = performance.now()) {
 function updateGamePauseState() {
     // Account for the last active interval before entering or leaving a pause.
     updateGameClock();
-    gameClock.paused = !gameStarted || gameOver || manuallyPaused || document.hidden;
-    gameAudio.setScene(gameOver ? "over" : !gameStarted ? "menu" : manuallyPaused ? "paused" : "play");
+    gameClock.paused = !gameStarted || gameOver || manuallyPaused || keyBindings.isOpen() || document.hidden;
+    gameAudio.setScene(gameOver ? "over" : !gameStarted ? "menu" : (manuallyPaused || keyBindings.isOpen()) ? "paused" : "play");
 
     if (gameClock.paused) {
         cancelMovement();
@@ -656,6 +656,7 @@ function resizeGameCanvas() {
     canvas.style.height = canvas.height + "px";
     document.documentElement?.style.setProperty("--bottom-hud-height", bottomHeight + "px");
     gameHudHeight = gameHud.hidden ? 0 : gameHud.getBoundingClientRect().height;
+    document.documentElement?.style.setProperty("--death-zone-width", getDeathZoneWidth() + "px");
     statsPanel.style.maxHeight = Math.max(0, canvas.height - gameHudHeight - 20) + "px";
     positionStatsPanel();
     Object.assign(player, clampPointToCanvas(player.x, player.y));
@@ -685,7 +686,7 @@ function resizeGameCanvas() {
         }
     }
 
-    for (const pickup of harvestPickups) {
+    for (const pickup of [...harvestPickups, ...cooldownPickups]) {
         Object.assign(pickup, freeActorPoint(clampPointToCanvas(pickup.x, pickup.y), 24));
     }
 }
@@ -723,6 +724,7 @@ startGameBtn.addEventListener("click", startGame);
 // --------------------
 
 function updateHud() {
+    updateCooldownPickupHud();
 
     const healthPercentage =
         player.health /
@@ -751,7 +753,7 @@ function updateAbilityHud() {
         const armed = armedAbility === name;
         const instant = instantAbilities.has(name);
         const unlocked = player.unlocks[name];
-        const key = Object.keys(abilityHud).indexOf(name) + 1;
+        const key = keyBindings.label(name);
         const previous = abilitySoundState[name];
         if (canControlPlayer()) {
             if (previous.active && !active && state.durationMs) gameAudio.play("expire");
@@ -781,14 +783,15 @@ function updateStatsPanel() {
     const effects = [
         player.unlocks.piercingRound && "Piercing",
         player.unlocks.knockback && "Knockback",
-        player.unlocks.explosiveKernel && "Explosive"
+        player.unlocks.explosiveKernel && "Explosive",
+        player.unlocks.ricochet && "Ricochet ×2"
     ].filter(Boolean);
     const values = {
         health: player.health + " / " + player.maxHealth,
-        speed: Math.round(player.speed * 60) + " px/s",
+        speed: Math.round(player.speed * 60) + "/s",
         damage: Number(player.damage.toFixed(1)).toString(),
-        bulletSpeed: Math.round(player.bulletSpeed * 60) + " px/s",
-        fireRate: Number(player.fireRate.toFixed(2)) + " shots/s",
+        bulletSpeed: Math.round(player.bulletSpeed * 60) + "/s",
+        fireRate: Number(player.fireRate.toFixed(2)) + "/s",
         criticalChance: Number((player.criticalChance * 100).toFixed(1)) + "%",
         weaponEffects: effects.join(" · ") || "None",
         rakeName: getRake().name,
@@ -797,16 +800,21 @@ function updateStatsPanel() {
     for (const [name, value] of Object.entries(values)) {
         if (statFields[name].textContent !== value) statFields[name].textContent = value;
     }
+    for (const [name, state] of Object.entries(abilityState)) {
+        document.getElementById("statCooldown-" + name).textContent = Number((state.cooldownMs / 1000).toPrecision(3)) + "s";
+    }
     for (const [name, upgrade] of Object.entries(statsUpgrades)) {
+        const maxed = isUpgradeMaxed(name);
         const owned = !upgrade.repeatable && player.unlocks[name];
-        const available = canPurchaseUpgrades() && !owned && player.seeds >= upgrade.cost;
-        const price = owned ? "✓ Owned" : (upgrade.repeatable ? "+ " : "🔒 ") + upgrade.cost + " seeds";
+        const available = canPurchaseUpgrades() && !maxed && !owned && player.seeds >= upgrade.cost;
+        const price = owned ? "Owned" : maxed ? "Max" : upgrade.cost.toString();
         if (upgrade.button.textContent !== price) upgrade.button.textContent = price;
         upgrade.button.setAttribute("aria-disabled", String(!available));
         upgrade.button.classList.toggle("owned", Boolean(owned));
+        upgrade.button.classList.toggle("maxed", maxed);
         upgrade.button.classList.toggle("affordable", available);
-        upgrade.button.setAttribute("aria-label", owned ? upgrade.label + " purchased" : (upgrade.repeatable ? "Upgrade " : "Unlock ") + upgrade.label + " for " + upgrade.cost + " seeds");
-        upgrade.button.title = owned ? "Applies only to your thrown rake." : upgrade.label + ": " + upgrade.cost + " seeds";
+        upgrade.button.setAttribute("aria-label", owned ? upgrade.label + " purchased" : maxed ? upgrade.label + " at maximum" : (upgrade.repeatable ? "Upgrade " : "Unlock ") + upgrade.label + " for " + upgrade.cost + " seeds");
+        upgrade.button.title = owned ? "Applies only to your thrown rake." : maxed ? "Maximum upgrade reached" : upgrade.label + ": " + upgrade.cost + " seeds. " + (upgrade.button.dataset.benefit || "");
     }
 }
 
@@ -919,7 +927,7 @@ function togglePause() {
     if (!gameStarted || gameOver) return;
     manuallyPaused = !manuallyPaused;
     document.getElementById("pauseOverlay").hidden = !manuallyPaused;
-    pauseBtn.textContent = manuallyPaused ? "Resume (Space)" : "Pause (Space)";
+    keyBindings.refresh();
     pauseBtn.setAttribute("aria-pressed", String(manuallyPaused));
     gameAudio.play(manuallyPaused ? "open" : "close");
     updateGamePauseState();
@@ -943,12 +951,21 @@ function toggleAutomaticTarget() {
     weaponState.target = null;
     weaponState.nextTargetSearchAt = 0;
     autoTargetToggle.setAttribute("aria-pressed", String(weaponState.automaticTarget));
-    autoTargetToggle.textContent = "Aim: " + (weaponState.automaticTarget ? "Auto" : "Mouse") + " (C)";
+    keyBindings.refresh();
     gameAudio.play("click");
 }
 autoTargetToggle.addEventListener("click", toggleAutomaticTarget);
 
 function applyUpgrade(upgrade) {
+    if (upgrade === "moveSpeed") player.speed = Math.min(8, player.speed * (1 + upgradeRates.moveSpeed));
+    if (upgrade.startsWith("cooldown-")) {
+        const state = abilityState[upgrade.slice(9)];
+        const fraction = getCooldownRemainingMs(upgrade.slice(9)) / state.cooldownMs;
+        state.cooldownMs *= 1 - upgradeRates.cooldown;
+        if (fraction > 0) state.lastUsedAt = gameClock.elapsedMs - state.cooldownMs * (1 - fraction);
+        updateAbilityHud();
+    }
+
 
     if (upgrade === "maxHealth") {
 
@@ -958,22 +975,23 @@ function applyUpgrade(upgrade) {
     }
 
     if (upgrade === "damage") {
-        player.damage *= 1.10;
+        player.damage *= 1 + upgradeRates.damage;
     }
 
     if (upgrade === "bulletSpeed") {
-        player.bulletSpeed *= 1.08;
+        player.bulletSpeed *= 1 + upgradeRates.bulletSpeed;
     }
 
     if (upgrade === "fireRate") {
-        player.fireRate *= 1.10;
+        const oldRate = player.fireRate;
+        player.fireRate = Math.min(15, player.fireRate * (1 + upgradeRates.fireRate));
         // Preserve shot progress while applying the faster rate immediately.
         const remaining = Math.max(0, weaponState.nextShotAt - gameClock.elapsedMs);
-        weaponState.nextShotAt = gameClock.elapsedMs + remaining / 1.10;
+        weaponState.nextShotAt = gameClock.elapsedMs + remaining / (player.fireRate / oldRate);
     }
 
     if (upgrade === "criticalChance") {
-        player.criticalChance = Math.min(1, player.criticalChance + 0.02);
+        player.criticalChance = Math.min(1, player.criticalChance + upgradeRates.criticalChance);
     }
 
 
@@ -990,9 +1008,13 @@ function canPurchaseUpgrades() {
     return gameStarted && !gameOver && !document.hidden;
 }
 
+function isUpgradeMaxed(name) {
+    return name === "criticalChance" && player.criticalChance >= 1 || name === "moveSpeed" && player.speed >= 8 || name === "fireRate" && player.fireRate >= 15;
+}
+
 function purchaseUpgrade(name) {
     const upgrade = statsUpgrades[name];
-    if (!upgrade || !canPurchaseUpgrades() || (!upgrade.repeatable && player.unlocks[name])) return false;
+    if (!upgrade || isUpgradeMaxed(name) || !canPurchaseUpgrades() || (!upgrade.repeatable && player.unlocks[name])) return false;
     if (player.seeds < upgrade.cost) { gameAudio.play("denied"); return false; }
     player.seeds -= upgrade.cost;
     if (upgrade.repeatable) {
@@ -1034,7 +1056,8 @@ function selectAbility(name) {
     if (!canUseAbility(name)) return;
     clearArmedAbility();
     if (name === "energyShield") useEnergyShield();
-    else useTimeFreeze();
+    else if (name === "timeFreeze") useTimeFreeze();
+    else useRakeFrenzy();
 }
 
 function armAbility(name) {
@@ -1045,7 +1068,7 @@ function armAbility(name) {
         armedAbility = name;
         canvas.style.cursor = "none";
         const hint = document.getElementById("abilityHint");
-        hint.textContent = abilityLabels[name] + " ready · " + (name === "dash" ? "Left-click to sprint" : "Left-click to use") + " · Esc to cancel";
+        hint.textContent = abilityLabels[name] + " ready · " + (name === "dash" ? "Left-click to sprint" : "Left-click to use") + " · " + keyBindings.label("cancel") + " to cancel";
         hint.hidden = false;
         gameAudio.play("marker");
     }
@@ -1124,6 +1147,16 @@ function useTimeFreeze() {
     abilityState.timeFreeze.lastUsedAt = gameClock.elapsedMs;
     abilityState.timeFreeze.activeUntil = gameClock.elapsedMs + abilityState.timeFreeze.durationMs;
     updateAbilityHud();
+}
+
+function isRakeFrenzyActive() { return gameClock.elapsedMs < abilityState.rakeFrenzy.activeUntil; }
+
+function useRakeFrenzy() {
+    if (!canUseAbility("rakeFrenzy")) return;
+    abilityState.rakeFrenzy.lastUsedAt = gameClock.elapsedMs;
+    abilityState.rakeFrenzy.activeUntil = gameClock.elapsedMs + 5000;
+    rakeState.nextThrowAt = gameClock.elapsedMs;
+    gameAudio.play("ready"); updateAbilityHud(); updateRakeStatus();
 }
 
 function isLureActive() {
@@ -1259,53 +1292,24 @@ function drawDashTrail() {
 // --------------------
 
 window.addEventListener("keydown", function(event) {
-    if (!gameStarted || gameOver || event.ctrlKey || event.altKey || event.metaKey) return;
-    const key = event.key.toLowerCase();
-    const editing = event.target?.closest?.("input, textarea, select, [contenteditable], #soundControls");
-    if (editing) return;
-
-    // Space pauses even when a HUD button has focus, without clicking that button.
-    if (event.code === "Space" || key === " ") {
-        event.preventDefault();
-        if (!event.repeat) togglePause();
-        return;
-    }
-    if (key === "c") {
-        event.preventDefault();
-        if (!event.repeat) toggleAutomaticTarget();
-        return;
-    }
-    if (gameClock.paused || manuallyPaused) return;
-
-    // Enter still activates focused UI buttons.
-    if (event.target?.closest?.("button") && key === "enter") return;
-
-    if (["w", "a", "s", "d"].includes(key)) {
-        event.preventDefault();
-        movement.keys.add(key);
-        // Keyboard steering replaces an old click destination.
-        movement.target = null;
-        return;
-    }
-
-    const abilityKeys = { "1": "teleport", "2": "energyShield", "3": "dash", "4": "timeFreeze", "5": "lure" };
-    if (abilityKeys[key]) {
-        event.preventDefault();
-        if (!event.repeat) selectAbility(abilityKeys[key]);
-    } else if (key === "escape") {
-        clearArmedAbility();
-        updateAbilityHud();
-    } else if (key.startsWith("arrow")) {
-        event.preventDefault();
-    }
+    if (!gameStarted || gameOver || keyBindings.isOpen() || event.ctrlKey || event.altKey || event.metaKey) return;
+    if (event.target?.closest?.("input, textarea, select, [contenteditable], #soundControls")) return;
+    const action = keyBindings.actionFor(event);
+    if (!action) return;
+    event.preventDefault();
+    if (action === "pause") { if (!event.repeat) togglePause(); return; }
+    if (action === "autoAim") { if (!event.repeat) toggleAutomaticTarget(); return; }
+    if (!canControlPlayer()) return;
+    const directions = { moveUp: "w", moveLeft: "a", moveDown: "s", moveRight: "d" };
+    if (directions[action]) { movement.keys.add(directions[action]); movement.target = null; return; }
+    if (abilityState[action]) { if (!event.repeat) selectAbility(action); }
+    else if (action === "cancel") { clearArmedAbility(); updateAbilityHud(); }
 });
 
 window.addEventListener("keyup", function(event) {
-    const key = event.key.toLowerCase();
-    if (!movement.keys.delete(key)) return;
-    if (movement.keys.size === 0 && movement.rightButtonDown && canControlPlayer()) {
-        movement.target = getMovementTarget(mouse.x, mouse.y);
-    }
+    const direction = { moveUp: "w", moveLeft: "a", moveDown: "s", moveRight: "d" }[keyBindings.actionFor(event)];
+    if (!movement.keys.delete(direction)) return;
+    if (movement.keys.size === 0 && movement.rightButtonDown && canControlPlayer()) movement.target = getMovementTarget(mouse.x, mouse.y);
 });
 
 function getCanvasMousePoint(event) {
@@ -1390,7 +1394,7 @@ function updateAutomaticShooting() {
         y: player.y,
         dx: weaponState.aimX * player.bulletSpeed,
         dy: weaponState.aimY * player.bulletSpeed,
-        size: 4,
+        size: 5,
         damage: criticalHit ? player.damage * 2 : player.damage,
         critical: criticalHit,
         piercing: false,
@@ -1508,54 +1512,49 @@ function drawMovementTarget() {
 // --------------------
 
 function updateBullets(deltaMs = 1000 / 60) {
+    if (!canControlPlayer()) return;
+    const frameScale = Math.min(deltaMs, 50) / (1000 / 60);
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const bullet = bullets[i];
+        let remaining = frameScale;
+        let spent = false;
+        do {
+            const startX = bullet.x, startY = bullet.y;
+            const endX = startX + bullet.dx * remaining;
+            const endY = startY + bullet.dy * remaining;
+            const collision = wallCollision(startX, startY, endX, endY, bullet.size);
+            const travel = collision?.time ?? 1;
+            bullet.x = startX + (endX - startX) * travel;
+            bullet.y = startY + (endY - startY) * travel;
 
-    if (!canControlPlayer()) {
-        return;
-    }
-
-    for (
-        let i = bullets.length - 1;
-        i >= 0;
-        i--
-    ) {
-
-        const frameScale = Math.min(deltaMs, 50) / (1000 / 60);
-        const startX = bullets[i].x;
-        const startY = bullets[i].y;
-        bullets[i].x += bullets[i].dx * frameScale;
-        bullets[i].y += bullets[i].dy * frameScale;
-        const wallTime = wallHitTime(startX, startY, bullets[i].x, bullets[i].y, bullets[i].size);
-        if (wallTime !== null) {
-            bullets[i].x = startX + (bullets[i].x - startX) * wallTime;
-            bullets[i].y = startY + (bullets[i].y - startY) * wallTime;
-        }
-
-        // Sweep the whole path so fast upgraded bullets cannot skip enemies.
-        if (resolveBulletHits(bullets[i], startX, startY)) {
-            bullets.splice(i, 1);
-            continue;
-        }
-
-        if (wallTime !== null) {
-            wallSparks.push({ x: bullets[i].x, y: bullets[i].y, createdAt: gameClock.elapsedMs });
+            // Resolve enemies on each segment before its wall impact, including
+            // reflected travel. Piercing keeps the same hit history after a bounce.
+            if (resolveBulletHits(bullet, startX, startY)) {
+                spent = true;
+                break;
+            }
+            if (!collision) break;
+            wallSparks.push({ x: bullet.x, y: bullet.y, createdAt: gameClock.elapsedMs });
             gameAudio.play("hit");
-            bullets.splice(i, 1);
-            continue;
-        }
+            if (bullet.kind !== "rake" || !(bullet.bouncesRemaining > 0)
+                || (!collision.normalX && !collision.normalY)) {
+                spent = true;
+                break;
+            }
 
-        if (
-            bullets[i].x < 0 ||
-            bullets[i].x > canvas.width ||
-            bullets[i].y < 0 ||
-            bullets[i].y > canvas.height
-        ) {
+            bullet.bouncesRemaining--;
+            if (collision.normalX) bullet.dx = -bullet.dx;
+            if (collision.normalY) bullet.dy = -bullet.dy;
+            bullet.angle = Math.atan2(bullet.dy, bullet.dx);
+            // Move just outside the surface to avoid hitting it again at time zero.
+            bullet.x += collision.normalX * 0.001;
+            bullet.y += collision.normalY * 0.001;
+            remaining *= 1 - travel;
+        } while (remaining > 0);
 
-            bullets.splice(i, 1);
-
-        }
-
+        if (spent || bullet.x < 0 || bullet.x > canvas.width
+            || bullet.y < 0 || bullet.y > canvas.height) bullets.splice(i, 1);
     }
-
 }
 
 
@@ -1585,6 +1584,7 @@ function draw() {
     drawScrollingWorld();
     drawHayStacks();
     drawHarvestPickups();
+    drawCooldownPickups();
     drawWalls();
     drawMovementTarget();
     drawLure();
@@ -1624,6 +1624,10 @@ function draw() {
             drawRake(ctx, bullet.x, bullet.y, bullet.angle, bullet.level, 0.85);
             continue;
         }
+        ctx.strokeStyle = bullet.critical ? "#ffad4f" : "#fff19a";
+        ctx.lineWidth = bullet.critical ? 4 : 3;
+        ctx.beginPath(); ctx.moveTo(bullet.x, bullet.y);
+        ctx.lineTo(bullet.x - bullet.dx * 1.4, bullet.y - bullet.dy * 1.4); ctx.stroke();
         if (bullet.critical) {
             ctx.fillStyle = "orange";
         } else {
@@ -1700,6 +1704,7 @@ function gameLoop() {
         updateAutomaticShooting();
         updateHayStacks(player.x, player.y, travel.segments);
         updateHarvestPickups(travel.segments);
+        updateCooldownPickups(travel.segments);
         updateLure();
         updateCombatEffects();
         updateMonsterContact();
@@ -1710,6 +1715,7 @@ function gameLoop() {
     updateAbilityHud();
     updateStatsPanel();
     updateRakeStatus();
+    updateCooldownPickupHud();
 
     requestAnimationFrame(
         gameLoop
@@ -1728,3 +1734,13 @@ window.addEventListener("resize", resizeGameCanvas);
 new ResizeObserver(resizeGameCanvas).observe(gameHud);
 
 new ResizeObserver(resizeGameCanvas).observe(bottomHud);
+
+// Background map clicks pass through the panel; wheel scrolling still reaches its long list.
+window.addEventListener("wheel", event => {
+    if (statsPanel.hidden || statsContent.hidden || keyBindings.isOpen()) return;
+    const rect = statsPanel.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
+    if (statsContent.scrollHeight <= statsContent.clientHeight) return;
+    event.preventDefault(); statsContent.scrollTop += event.deltaY;
+}, { passive: false });
+keyBindings.init();

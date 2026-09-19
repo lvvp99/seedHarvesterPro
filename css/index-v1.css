@@ -845,3 +845,54 @@ canvas {
     #rakeStatus { font-size: 9px; }
 }
 
+/* Compact stats stay inside the left danger strip at their default position. */
+#statsPanel { width: max(40px,calc(var(--death-zone-width,128px) - 8px)); padding: 5px; font-size: 10px; border-color: #ffffff24; }
+#statsPanel .statsHeader { gap: 3px; }
+#statsToggle { padding: 4px; font-size: 10px; }
+#statsDragHandle { padding: 3px 5px; font-size: 14px; }
+#statsContent { scrollbar-width: thin; overflow-x: hidden; }
+#statsContent h3 { font-size: 9px; letter-spacing: .02em; line-height: 1.25; margin: 8px 0 3px; overflow-wrap: anywhere; }
+#statsContent dl > div { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; column-gap: 3px; row-gap: 1px; padding: 3px 0; }
+#statsContent dt { grid-column: 1; grid-row: 1; font-size: 9px; color: #e0e7d9; overflow-wrap: anywhere; }
+#statsContent dd { display: contents; font-size: 10px; text-align: left; }
+#statsContent dd > span { grid-column: 1; grid-row: 2; }
+#statsContent dd > span:only-child { grid-column: 1 / -1; }
+#statsContent dd > .statUpgradeButton { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+#statsContent .statUpgradeButton { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 0; max-width: 100%; padding: 2px 3px; font: bold 10px Arial; min-height: 21px; }
+#statsContent .statUpgradeButton:not(.owned):not(.maxed)::after { content: ""; flex: 0 0 12px; width: 12px; height: 14px; background: url("../imgs/seeds/1.svg") center / contain no-repeat; }
+#statsContent .rakeEquipped { font-size: 9px; line-height: 1.3; }
+.weaponUnlocks { gap: 4px; }
+.weaponUnlocks > div { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 3px; font-size: 9px; text-align: left; }
+.weaponUnlocks button { justify-self: end; }
+#bottomHud #abilityBar { grid-template-columns: repeat(6,minmax(0,1fr)); gap: 5px; }
+#bottomHud { grid-template-columns: minmax(100px,1fr) minmax(620px,850px) minmax(105px,1fr); }
+#bottomHud .abilityKeyCircle { max-width: calc(100% - 8px); width: auto; min-width: 16px; padding: 0 3px; font-size: 9px; overflow: hidden; text-overflow: ellipsis; }
+#cooldownResetNotice { position: fixed; top: 65px; left: 50%; transform: translateX(-50%); z-index: 11; padding: 10px 18px; border: 1px solid #6eebff; border-radius: 8px; background: #132f3bee; color: #b5f6ff; font: bold 15px Arial; pointer-events: none; text-align: center; }
+#bottomHud .cooldownsReset .abilityHudItem { box-shadow: 0 0 12px #6eebff99; border-color: #6eebff; }
+#keybindingsBtn { color: #e6eccc; background: #263322; border: 1px solid #627755; border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+#keybindingsDialog { width: min(560px,calc(100vw - 28px)); max-height: calc(100vh - 32px); overflow-y: auto; background: #202c22; color: #f2efd9; border: 1px solid #768d68; border-radius: 14px; padding: 22px; }
+#keybindingsDialog::backdrop { background: #08120dbb; }
+#keybindingsDialog h2 { font-size: 23px; margin: 0 0 8px; }
+#keybindingsDialog p { font-size: 13px; line-height: 1.5; color: #c1cfba; }
+#keybindingList { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px 18px; margin: 18px 0; }
+.bindingRow { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-bottom: 1px solid #40543b; padding: 5px 0; font-size: 12px; }
+#keybindingsDialog button { color: #ffe3a2; background: #34452d; border: 1px solid #839568; border-radius: 5px; padding: 7px 10px; cursor: pointer; font-size: 12px; }
+.bindingRow button { min-width: 48px; }
+#keybindingsDialog button.listening { background: #5c4a21; border-color: #ffe08a; }
+#bindingMessage { min-height: 40px; color: #ffe08a !important; }
+.bindingActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.abilityControls { grid-template-columns: repeat(6,minmax(0,1fr)); }
+@media(max-width:1000px) {
+    #bottomHud { grid-template-columns: 1fr 1fr; }
+    #bottomHud #abilityBar { grid-column: 1 / -1; grid-row: 2; }
+    #rakeHud { display: flex; gap: 8px; align-items: center; }
+    #autoTargetToggle { grid-column: 2; justify-self: end; }
+}
+@media(max-width:560px) {
+    #bottomHud #abilityBar { grid-template-columns: repeat(3,minmax(0,1fr)); }
+    #bottomHud .abilityHudItem { height: 58px; padding-top: 6px; }
+    #bottomHud .abilityIconVisual { padding-right: 16px; }
+    #keybindingList { grid-template-columns: minmax(0,1fr); }
+    .abilityControls { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+

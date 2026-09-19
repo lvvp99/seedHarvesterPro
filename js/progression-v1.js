@@ -60,7 +60,7 @@ function updateProgressionHud() {
 
 function updateRakeStatus() {
     const remaining = Math.max(0, rakeState.nextThrowAt - gameClock.elapsedMs);
-    const label = remaining > 0 ? "Recovering · " + (remaining / 1000).toFixed(1) + "s" : "Left-click · Ready";
+    const label = isRakeFrenzyActive() ? "Frenzy · " + Math.ceil((abilityState.rakeFrenzy.activeUntil - gameClock.elapsedMs) / 1000) + "s · Click rapidly!" : remaining > 0 ? "Recovering · " + (remaining / 1000).toFixed(1) + "s" : "Left-click · Ready";
     const status = document.getElementById("rakeStatus");
     if (status.textContent !== label) status.textContent = label;
 }
@@ -72,13 +72,14 @@ function getPlayerAimAngle() {
 }
 
 function throwRake() {
-    if (!canControlPlayer() || gameClock.elapsedMs < rakeState.nextThrowAt) return false;
+    if (!canControlPlayer() || (!isRakeFrenzyActive() && gameClock.elapsedMs < rakeState.nextThrowAt)) return false;
     const angle = getPlayerAimAngle();
     const speed = 12 + player.level * 0.12;
     bullets.push({ kind: "rake", level: player.level, x: player.x, y: player.y,
         dx: Math.cos(angle) * speed, dy: Math.sin(angle) * speed, angle, size: Math.round(10 + getRake().headWidth * 0.4),
         damage: getRake().damage, piercing: player.unlocks.piercingRound,
-        knockback: player.unlocks.knockback, explosive: player.unlocks.explosiveKernel });
+        knockback: player.unlocks.knockback, explosive: player.unlocks.explosiveKernel,
+        bouncesRemaining: player.unlocks.ricochet ? 2 : 0 });
     rakeState.nextThrowAt = gameClock.elapsedMs + rakeState.cooldownMs;
     gameAudio.play("shot");
     updateRakeStatus();

@@ -117,11 +117,11 @@ function startScrollingWorld() {
 }
 
 function scrollWorld(deltaMs) {
-    if (!canControlPlayer() || !worldState.started) return;
+    if (!canControlPlayer() || !worldState.started || isTimeFreezeActive()) return;
     const shift = getScrollSpeed() * Math.min(deltaMs, 50) / 1000;
     worldState.scroll += shift;
     worldState.nextWallX -= shift;
-    const carried = [player, ...walls, ...hayStacks, ...harvestPickups, ...harvestBursts, ...dashTrail, ...monsters, ...bullets, ...collectionEffects, ...combatEffects, ...wallSparks];
+    const carried = [player, ...walls, ...hayStacks, ...harvestPickups, ...cooldownPickups, ...harvestBursts, ...dashTrail, ...monsters, ...bullets, ...collectionEffects, ...combatEffects, ...wallSparks];
     if (abilityState.lure.point) carried.push(abilityState.lure.point);
     if (movement.target && !movement.rightButtonDown) carried.push(movement.target);
     for (const item of carried) item.x -= shift;
@@ -231,23 +231,56 @@ function moveActor(actor, dx, dy, radius, verticalWrap = false, playerBounds = f
     return { distance, segments, wrapped };
 }
 
-function wallHitTime(startX, startY, endX, endY, radius = 0) {
+function wallCollision(startX, startY, endX, endY, radius = 0) {
     let first = null;
+    const tolerance = 1e-9;
     for (const wall of walls) {
-        let enter = 0, leave = 1;
-        for (const [start, delta, low, high] of [
-            [startX, endX - startX, wall.x - radius, wall.x + wall.width + radius],
-            [startY, endY - startY, wall.y - radius, wall.y + wall.height + radius]
+        const left = wall.x - radius, right = wall.x + wall.width + radius;
+        const top = wall.y - radius, bottom = wall.y + wall.height + radius;
+        let enter = -Infinity, leave = Infinity;
+        let normalX = 0, normalY = 0;
+        for (const [start, delta, low, high, axisX, axisY] of [
+            [startX, endX - startX, left, right, 1, 0],
+            [startY, endY - startY, top, bottom, 0, 1]
         ]) {
-            if (delta === 0) { if (start < low || start > high) { enter = 2; break; } }
+            if (delta === 0) { if (start < low || start > high) { enter = Infinity; break; } }
             else {
                 const a = (low - start) / delta, b = (high - start) / delta;
-                enter = Math.max(enter, Math.min(a, b)); leave = Math.min(leave, Math.max(a, b));
+                const near = Math.min(a, b);
+                const direction = -Math.sign(delta);
+                if (near > enter + tolerance) {
+                    enter = near;
+                    normalX = axisX * direction;
+                    normalY = axisY * direction;
+                } else if (Math.abs(near - enter) <= tolerance) {
+                    // An exact corner reflects both components of travel.
+                    normalX += axisX * direction;
+                    normalY += axisY * direction;
+                }
+                leave = Math.min(leave, Math.max(a, b));
             }
         }
-        if (enter <= leave && enter <= 1 && (first === null || enter < first)) first = enter;
+        if (enter > leave || leave < 0 || enter > 1) continue;
+        if (enter < 0) {
+            // A shot already inside a wall has no safe reflecting face. Boundary
+            // contacts moving away from or along a wall should not collide again.
+            if (startX <= left || startX >= right || startY <= top || startY >= bottom) continue;
+            enter = 0;
+            normalX = normalY = 0;
+        } else if (leave === 0) continue;
+        if (first === null || enter < first.time - tolerance) {
+            first = { time: enter, normalX, normalY };
+        } else if (Math.abs(enter - first.time) <= tolerance) {
+            // Walls that meet at a corner act as a single simultaneous impact.
+            first.normalX ||= normalX;
+            first.normalY ||= normalY;
+        }
     }
     return first;
+}
+
+function wallHitTime(startX, startY, endX, endY, radius = 0) {
+    return wallCollision(startX, startY, endX, endY, radius)?.time ?? null;
 }
 
 function monsterNavigationTarget(monster, target) {
@@ -346,9 +379,7 @@ function drawDeathZone() {
     ctx.restore();
     ctx.save(); ctx.strokeStyle = "#ff6c63"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(width, gameHudHeight); ctx.lineTo(width, canvas.height); ctx.stroke();
-    ctx.translate(width / 2, gameHudHeight + height * 0.65); ctx.rotate(-Math.PI / 2);
-    ctx.fillStyle = "#ffb4a7"; ctx.font = "bold 16px Arial"; ctx.textAlign = "center";
-    ctx.fillText("DEATH ZONE · KEEP MOVING", 0, 0); ctx.restore();
+    ctx.restore();
     if (gameClock.elapsedMs < worldState.zoneHitUntil) {
         ctx.fillStyle = "rgba(230, 35, 45, 0.12)"; ctx.fillRect(0, gameHudHeight, canvas.width, height);
     }

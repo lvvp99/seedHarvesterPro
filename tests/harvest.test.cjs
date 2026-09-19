@@ -5,7 +5,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const root = path.join(__dirname, "..");
-const source = ["js/audio-v1.js", "js/world-v1.js", "js/monsters-v1.js", "js/progression-v1.js", "js/history-v1.js", "js/game-v1.js"]
+const source = ["js/audio-v1.js", "js/world-v1.js", "js/monsters-v1.js", "js/progression-v1.js", "js/history-v1.js", "js/controls-v1.js", "js/pickups-v1.js", "js/game-v1.js"]
     .map(file => fs.readFileSync(path.join(root, file), "utf8")).join("\n");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 
@@ -321,6 +321,111 @@ test("a thrown rake damages crossed enemies and walls stop it before a protected
         assert.equal(game.run("victim.health"), wall ? 28 : 8);
         assert.equal(game.run("bullets.length"), 0);
     }
+});
+
+test("Ricochet is a one-time rake unlock and in-flight throws keep their original bounce allowance", () => {
+    const game = createCombatGame();
+    const button = game.elements.get("upgradeRicochet");
+    game.leftClick(1000, 360);
+    assert.equal(game.run("bullets[0].bouncesRemaining"), 0);
+    game.run("player.seeds = 349; updateStatsPanel()");
+    button.emit("click");
+    assert.equal(game.run("player.unlocks.ricochet"), false);
+    assert.equal(game.run("player.seeds"), 349);
+    game.run("player.seeds = 350");
+    game.key(" "); button.emit("click");
+    assert.equal(game.run("player.unlocks.ricochet"), true);
+    assert.equal(game.run("player.seeds"), 0);
+    assert.equal(button.textContent, "Owned");
+    assert.equal(game.elements.get("statWeaponEffects").textContent, "Ricochet ×2");
+    assert.equal(game.run("bullets[0].bouncesRemaining"), 0);
+    game.key(" "); game.run("rakeState.nextThrowAt = 0"); game.leftClick(1000, 360);
+    assert.equal(game.run("bullets[1].bouncesRemaining"), 2);
+    game.run("placeMonster('brute', 1000, 360); weaponState.nextShotAt = 0; updateAutomaticShooting()");
+    assert.equal(game.run("bullets[2].kind"), "basic");
+    assert.ok(!game.run("bullets[2].bouncesRemaining"));
+});
+
+test("Ricochet reflects on all wall faces and exact corners, including remaining frame movement and rotation", () => {
+    for (const [x,y,dx,dy,endX,endY,outDx,outDy] of [
+        [250,350,100,20,242,370,-100,20], [390,350,-100,20,398,370,100,20],
+        [320,200,10,100,330,192,10,-100], [320,500,10,-100,330,508,10,100],
+        [250,200,100,100,242,192,-100,-100]
+    ]) {
+        const game = createCombatGame();
+        game.run(`walls.push({x:300,y:250,width:40,height:200});
+            const shot = testBullet(${x},${y},${dx},{dy:${dy},bouncesRemaining:2}); updateBullets();`);
+        assert.equal(game.run("bullets.length"), 1);
+        assert.equal(game.run("shot.bouncesRemaining"), 1);
+        assert.equal(game.run("shot.dx"), outDx); assert.equal(game.run("shot.dy"), outDy);
+        assert.ok(Math.abs(game.run("shot.x")-endX)<0.01);
+        assert.ok(Math.abs(game.run("shot.y")-endY)<0.01);
+        assert.equal(game.run("shot.angle"), Math.atan2(outDy,outDx));
+        assert.equal(game.run("bodyTouchesWall(shot.x,shot.y,shot.size)"), false);
+    }
+});
+
+test("two bounces are shared across frames and a third wall hit consumes the rake even at high speed", () => {
+    for (const speed of [300,1000]) {
+        const game = createCombatGame();
+        game.run(`walls.push({x:200,y:200,width:20,height:300},{x:400,y:200,width:20,height:300});
+            const shot=testBullet(300,350,${speed},{bouncesRemaining:2}); updateBullets();`);
+        assert.equal(game.run("shot.bouncesRemaining"), 0);
+        if (speed === 300) {
+            assert.equal(game.run("bullets.length"), 1);
+            assert.equal(game.run("wallSparks.length"), 2);
+            assert.ok(Math.abs(game.run("shot.x")-256)<0.01);
+            game.run("updateBullets()");
+        }
+        assert.equal(game.run("bullets.length"), 0);
+        assert.equal(game.run("wallSparks.length"), 3);
+    }
+});
+
+test("wall bounces damage enemies on reflected paths and piercing does not hit the same enemy twice", () => {
+    for (const piercing of [false,true]) {
+        const game = createCombatGame();
+        game.run(`walls.push({x:400,y:200,width:20,height:300});
+            const reflected=placeMonster('brute',200,350);
+            const protectedEnemy=placeMonster('brute',480,350);
+            ${piercing ? "const front=placeMonster('brute',350,350);" : ""}
+            const shot=testBullet(300,350,500,{bouncesRemaining:2,piercing:${piercing}}); updateBullets();`);
+        assert.equal(game.run("reflected.health"), 58);
+        assert.equal(game.run("protectedEnemy.health"), 68);
+        if (piercing) assert.equal(game.run("front.health"), 58);
+        assert.equal(game.run("shot.hitMonsterIds.size"), piercing ? 2 : 1);
+        assert.equal(game.run("wallSparks.length"), 1);
+        assert.equal(game.run("bullets.length"), 0);
+    }
+    const game = createCombatGame();
+    game.run(`walls.push({x:400,y:200,width:20,height:300}); const front=placeMonster('brute',350,350);
+        testBullet(300,350,500,{bouncesRemaining:2}); updateBullets();`);
+    assert.equal(game.run("front.health"), 58);
+    assert.equal(game.run("wallSparks.length"), 0, "a non-piercing enemy hit consumes the rake before the wall");
+});
+
+test("basic shots, locked rakes, and embedded projectiles stop safely at walls", () => {
+    for (const options of ["{kind:'basic',bouncesRemaining:2}","{kind:'rake',bouncesRemaining:0}","{kind:'rake'}"]) {
+        const game = createCombatGame();
+        game.run(`walls.push({x:400,y:200,width:20,height:300}); testBullet(300,350,500,${options}); updateBullets();`);
+        assert.equal(game.run("bullets.length"),0);
+        assert.equal(game.run("wallSparks.length"),1);
+    }
+    const game = createCombatGame();
+    game.run(`walls.push({x:400,y:200,width:20,height:300});
+        testBullet(410,350,100,{bouncesRemaining:2}); updateBullets();`);
+    assert.equal(game.run("bullets.length"),0);
+});
+
+test("bounces do not stick at frame boundaries or when gliding along wall faces", () => {
+    const game = createCombatGame();
+    game.run(`walls.push({x:400,y:200,width:20,height:300});
+        const shot=testBullet(300,350,96,{bouncesRemaining:2}); updateBullets(); updateBullets();`);
+    assert.equal(game.run("shot.bouncesRemaining"),1);
+    assert.equal(game.run("wallSparks.length"),1);
+    assert.ok(Math.abs(game.run("shot.x")-300)<0.01);
+    assert.equal(game.run("wallHitTime(396,350,350,350,4)"),null);
+    assert.equal(game.run("wallHitTime(396,350,396,400,4)"),null);
 });
 
 test("basic projectiles cannot apply rake-only effects even if stale flags are present", () => {
@@ -761,11 +866,11 @@ test("specialty timers pause while paused and inputs do not conflict with UI or 
 });
 
 test("rake unlock buttons show their cost, become Owned, and never charge twice", () => {
- const game=createCombatGame(); game.run("player.seeds=1000");
+ const game=createCombatGame(); game.run("player.seeds=2000");
  for(const button of game.upgradeButtons.filter(b=>b.dataset.repeatable==="false")){
    const before=game.run("player.seeds"), cost=Number(button.dataset.cost);
    button.emit("click"); assert.equal(game.run("player.seeds"),before-cost);
-   assert.equal(button.textContent,"✓ Owned"); assert.equal(button.getAttribute("aria-disabled"),"true");
+   assert.equal(button.textContent,"Owned"); assert.equal(button.getAttribute("aria-disabled"),"true");
    button.emit("click"); assert.equal(game.run("player.seeds"),before-cost);
  }
 });
@@ -775,18 +880,18 @@ test("stats update after purchases and collapse/expand without changing the game
     game.start();
     assert.equal(game.elements.get("statsPanel").hidden, false);
     assert.equal(game.elements.get("statsPanel").style.top, "102px");
-    assert.equal(game.elements.get("statSpeed").textContent, "180 px/s");
+    assert.equal(game.elements.get("statSpeed").textContent, "180/s");
     game.run("player.seeds = 1000;");
     assert.equal(game.upgradeButtons.find(button => button.dataset.upgrade === "speed"), undefined);
     assert.equal(game.run("upgradeLevels.speed"), undefined);
     for (const upgrade of ["maxHealth", "damage", "bulletSpeed", "criticalChance", "piercingRound"]) {
         game.upgradeButtons.find(button => button.dataset.upgrade === upgrade).emit("click");
     }
-    assert.equal(game.elements.get("statSpeed").textContent, "180 px/s");
+    assert.equal(game.elements.get("statSpeed").textContent, "180/s");
     assert.equal(game.elements.get("statHealth").textContent, "110 / 110");
-    assert.equal(game.elements.get("statDamage").textContent, "11");
-    assert.equal(game.elements.get("statBulletSpeed").textContent, "648 px/s");
-    assert.equal(game.elements.get("statCriticalChance").textContent, "2%");
+    assert.equal(game.elements.get("statDamage").textContent, "8.6");
+    assert.equal(game.elements.get("statBulletSpeed").textContent, "630/s");
+    assert.equal(game.elements.get("statCriticalChance").textContent, "1%");
     assert.equal(game.elements.get("statWeaponEffects").textContent, "Piercing");
     const button = game.elements.get("statsToggle");
     button.emit("click");
@@ -799,15 +904,15 @@ test("stats update after purchases and collapse/expand without changing the game
     assert.equal(game.run("gameClock.paused"), false);
 });
 
-test("all five repeatable stats upgrades increase values and prices without casting an armed ability", () => {
+test("all repeatable stats upgrades increase values and prices without casting an armed ability", () => {
  const game=createCombatGame(); game.run("player.seeds=5000"); game.key("1");
- assert.deepEqual(game.upgradeButtons.filter(b=>b.dataset.repeatable==="true").map(b=>b.dataset.upgrade),["maxHealth","damage","bulletSpeed","fireRate","criticalChance"]);
+ assert.deepEqual(game.upgradeButtons.filter(b=>b.dataset.repeatable==="true").map(b=>b.dataset.upgrade),["maxHealth","moveSpeed","damage","bulletSpeed","fireRate","criticalChance","cooldown-teleport","cooldown-energyShield","cooldown-dash","cooldown-timeFreeze","cooldown-lure","cooldown-rakeFrenzy"]);
  for(const b of game.upgradeButtons.filter(b=>b.dataset.repeatable==="true")){
    const cost=Number(b.dataset.cost),before=game.run("player.seeds"); b.emit("click");
    assert.equal(game.run("player.seeds"),before-cost); assert.equal(Number(b.dataset.cost),Math.ceil(cost*1.1));
    assert.equal(game.run("armedAbility"),"teleport");
  }
- assert.equal(game.run("player.maxHealth"),110); assert.equal(game.run("player.damage"),11);
+ assert.equal(game.run("player.maxHealth"),110); assert.equal(game.run("player.damage"),8 * 1.08);
  assert.equal(game.run("getRake().damage"),20,"basic upgrades do not change rake damage");
 });
 
@@ -839,10 +944,10 @@ test("stats purchases work while paused but cannot overspend or run in a hidden 
 
 test("all stats and rake purchases apply during pause while time, actors and cooldowns remain frozen", () => {
     const game = createCombatGame();
-    game.run("player.seeds = 1000; weaponState.nextShotAt = gameClock.elapsedMs + 2000; placeMonster('crawler', 1000, 300);");
+    game.run("player.seeds = 2000; weaponState.nextShotAt = gameClock.elapsedMs + 2000; placeMonster('crawler', 1000, 300);");
     game.key("2");
     game.elements.get("pauseBtn").emit("click");
-    const snapshot = "({ time: gameClock.elapsedMs, x: player.x, y: player.y, monsters, shield: getCooldownRemainingMs('energyShield'), bullets })";
+    const snapshot = "({ time: gameClock.elapsedMs, x: player.x, y: player.y, monsters, bullets })";
     const paused = game.read(snapshot);
     let spent = 0;
     for (const button of game.upgradeButtons) {
@@ -850,25 +955,25 @@ test("all stats and rake purchases apply during pause while time, actors and coo
         assert.equal(button.getAttribute("aria-disabled"), "false");
         button.emit("click");
         spent += cost;
-        assert.equal(game.run("player.seeds"), 1000 - spent);
-        game.advance(1000);
+        assert.equal(game.run("player.seeds"), 2000 - spent);
+        game.advance(2000);
         assert.deepEqual(game.read(snapshot), paused);
     }
     assert.equal(game.run("player.maxHealth"), 110);
-    assert.equal(game.run("player.damage"), 11);
-    assert.equal(game.run("player.bulletSpeed"), 10.8);
-    assert.equal(game.run("player.fireRate"), 0.55);
-    assert.equal(game.run("player.criticalChance"), 0.02);
+    assert.equal(game.run("player.damage"), 8 * 1.08);
+    assert.equal(game.run("player.bulletSpeed"), 10.5);
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.7875) < 1e-9);
+    assert.equal(game.run("player.criticalChance"), 0.01);
     assert.equal(game.run("player.unlocks.piercingRound && player.unlocks.knockback && player.unlocks.explosiveKernel"), true);
     game.elements.get("upgradePiercingRound").emit("click");
-    assert.equal(game.run("player.seeds"), 1000 - spent, "owned unlocks cannot charge again");
-    assert.equal(game.run("weaponState.nextShotAt - gameClock.elapsedMs"), 2000 / 1.1);
+    assert.equal(game.run("player.seeds"), 2000 - spent, "owned unlocks cannot charge again");
+    assert.equal(game.run("weaponState.nextShotAt - gameClock.elapsedMs"), 2000 / (game.run("player.fireRate") / 0.75));
     game.elements.get("pauseBtn").emit("click");
-    game.advance(1800);
+    game.advance(1904);
     assert.equal(game.run("bullets.length"), 0);
     game.advance(20);
     assert.equal(game.run("bullets.length"), 1, "resuming uses the upgraded fire rate");
-    assert.equal(game.run("bullets[0].damage"), 11);
+    assert.equal(game.run("bullets[0].damage"), 8 * 1.08);
 });
 
 test("all five abilities are free and ready on the first HUD click or number-key press", () => {
@@ -1001,14 +1106,14 @@ test("basic attack waits for enemies, aims automatically, and keeps rake-only ef
     const game = createCombatGame();
     game.run("weaponState.nextShotAt = 0; updateAutomaticShooting()");
     assert.equal(game.run("bullets.length"), 0);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.5 shots/s");
+    assert.equal(game.elements.get("statFireRate").textContent, "0.75/s");
     game.run("const target = placeMonster('brute', 1000, 360); target.speed = 0; target.health = 10000;");
     game.window.emit("mousemove", { buttons: 0, clientX: 10, clientY: 360 });
     game.advance(150);
     assert.equal(game.run("bullets.length"), 1);
     assert.equal(game.run("bullets[0].dx"), 10);
     assert.equal(game.run("bullets[0].dy"), 0);
-    game.advance(1849);
+    game.advance(1183);
     assert.equal(game.run("bullets.length"), 1);
     game.advance(1);
     assert.equal(game.run("bullets.length"), 2);
@@ -1035,7 +1140,7 @@ test("automatic fire pauses with the game and never queues a burst after a stall
     assert.equal(game.run("bullets.length"), 1);
     game.document.hidden = false;
     game.document.emit("visibilitychange");
-    game.advance(1999);
+    game.advance(1333);
     assert.equal(game.run("bullets.length"), 1);
     game.advance(1);
     assert.equal(game.run("bullets.length"), 2);
@@ -1108,19 +1213,19 @@ test("Fire Rate is repeatable, costs seeds, updates stats, and speeds up the pen
     const button = game.upgradeButtons.find(item => item.dataset.upgrade === "fireRate");
     assert.ok(button);
     assert.equal(button.dataset.repeatable, "true");
-    assert.equal(game.run("player.fireRate"), 0.5);
+    assert.equal(game.run("player.fireRate"), 0.75);
     button.emit("click");
     assert.equal(game.run("upgradeLevels.fireRate"), 0);
-    assert.equal(game.run("player.fireRate"), 0.5);
+    assert.equal(game.run("player.fireRate"), 0.75);
 
-    game.advance(1000);
+    game.advance(300);
     game.run("player.seeds = 8;");
     button.emit("click");
     assert.equal(game.run("player.seeds"), 6);
     assert.equal(game.run("upgradeLevels.fireRate"), 1);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.55 shots/s");
+    assert.equal(game.elements.get("statFireRate").textContent, "0.79/s");
     assert.equal(Number(button.dataset.cost), 3);
-    game.advance(909);
+    game.advance(984);
     assert.equal(game.run("bullets.length"), 1);
     game.advance(0.2);
     assert.equal(game.run("bullets.length"), 2);
@@ -1128,8 +1233,8 @@ test("Fire Rate is repeatable, costs seeds, updates stats, and speeds up the pen
     button.emit("click");
     assert.equal(game.run("player.seeds"), 3);
     assert.equal(game.run("upgradeLevels.fireRate"), 2);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.605) < 0.000001);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.61 shots/s");
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.826875) < 0.000001);
+    assert.equal(game.elements.get("statFireRate").textContent, "0.83/s");
     assert.equal(Number(button.dataset.cost), 4);
     assert.equal(button.disabled, false);
     button.emit("click");
@@ -1617,7 +1722,7 @@ test("scrolling carries an idle player, terrain, pickups, projectiles, and plant
     game.start();
     game.run(`
         monsterState.nextSpawnAt = Infinity; nextHaySpawnAt = Infinity; weaponState.nextShotAt = Infinity;
-        abilityState.timeFreeze.activeUntil = Infinity;
+        for (const monster of monsters) monster.speed = 0;
         abilityState.lure.point = { x: 300, y: 400 }; abilityState.lure.activeUntil = Infinity;
         harvestPickups.push({ x: 800, y: 400, spawnedAt: 0 });
         bullets.length = 0; bullets.push({ x: 800, y: 350, dx: 0, dy: 0, size: 4, damage: 10 });
@@ -2038,13 +2143,13 @@ test("stats drag clamps to the viewport, survives collapsing and resizing, and d
     const handle = game.elements.get("statsDragHandle");
     handle.emit("pointerdown", { button: 0, pointerId: 4, clientX: 30, clientY: 120, preventDefault() {} });
     handle.emit("pointermove", { pointerId: 4, clientX: 530, clientY: 420 });
-    assert.deepEqual(game.read("({ x: statsPosition.x, y: statsPosition.y })"), { x: 510, y: 402 });
+    assert.deepEqual(game.read("({ x: statsPosition.x, y: statsPosition.y })"), { x: 504, y: 402 });
     handle.emit("pointerup");
     assert.equal(game.run("statsPosition.drag"), null);
     assert.equal(game.run("armedAbility"), "teleport");
     assert.equal(game.run("player.x"), 640);
     game.elements.get("statsToggle").emit("click");
-    assert.equal(game.run("statsPosition.x"), 510);
+    assert.equal(game.run("statsPosition.x"), 504);
     game.window.innerWidth = 390; game.window.innerHeight = 400; game.window.emit("resize");
     assert.equal(game.run("statsPosition.x"), 140);
     assert.equal(game.run("statsPosition.y"), 298);
@@ -2083,5 +2188,175 @@ test("Harvest All appears occasionally on free ground, pauses, scrolls and expir
     assert.equal(game.run("spawnHarvestPickup()"), false);
     game.run("harvestPickups[0].x = -40; scrollWorld(50)");
     assert.equal(game.run("harvestPickups.length"), 0);
+});
+
+test("key bindings reject collisions, persist, update HUD labels, and reset every action", () => {
+    const storage = new Map();
+    const game = createGame({ storage });
+    game.elements.get("keybindingsBtn").emit("click");
+    game.elements.get("bind-teleport").emit("click");
+    game.key("w");
+    assert.match(game.elements.get("bindingMessage").textContent, /already used/);
+    assert.equal(game.run("keyBindings.label('teleport')"), "1");
+    game.key("k");
+    assert.equal(game.elements.get("teleportKey").textContent, "K");
+    game.elements.get("bind-pause").emit("click"); game.key("p");
+    game.elements.get("bind-autoAim").emit("click"); game.key("j");
+    game.elements.get("bind-moveUp").emit("click"); game.key("ArrowUp");
+    game.elements.get("closeKeybindingsBtn").emit("click");
+    game.start(); game.key("w"); game.advance(50);
+    assert.equal(game.run("player.y"), 360);
+    game.key("ArrowUp"); game.advance(50); game.releaseKey("ArrowUp");
+    assert.equal(game.run("player.y"), 351);
+    game.key("1"); assert.equal(game.run("armedAbility"), null);
+    game.key("k"); assert.equal(game.run("armedAbility"), "teleport");
+    game.key("j"); assert.equal(game.run("weaponState.automaticTarget"), false);
+    game.key(" "); assert.equal(game.run("manuallyPaused"), false);
+    game.key("p"); assert.equal(game.run("manuallyPaused"), true);
+    assert.equal(game.elements.get("pauseBtn").textContent, "Resume (P)");
+    const reloaded = createGame({ storage });
+    assert.equal(reloaded.run("keyBindings.label('teleport')"), "K");
+    reloaded.elements.get("keybindingsBtn").emit("click");
+    reloaded.elements.get("resetKeybindingsBtn").emit("click");
+    assert.equal(reloaded.run("keyBindings.label('teleport')"), "1");
+    assert.equal(reloaded.run("keyBindings.label('pause')"), "Space");
+    assert.equal(reloaded.run("keyBindings.label('autoAim')"), "C");
+    assert.equal(reloaded.run("keyBindings.label('moveUp')"), "W");
+    assert.equal(reloaded.run("keyBindings.label('rakeFrenzy')"), "6");
+    assert.equal(createGame({ storage }).run("keyBindings.label('teleport')"), "1");
+});
+
+test("the bindings menu pauses safely, captures keys without firing, and preserves manual pause", () => {
+    const game = createCombatGame();
+    game.key("d"); game.key("1");
+    game.elements.get("keybindingsBtn").emit("click");
+    assert.equal(game.run("movement.keys.size"), 0);
+    assert.equal(game.run("armedAbility"), null);
+    game.advance(50000); game.leftClick();
+    assert.equal(game.run("gameClock.elapsedMs"), 0);
+    assert.equal(game.run("bullets.length"), 0);
+    game.elements.get("bind-rakeFrenzy").emit("click"); game.key("r");
+    assert.equal(game.run("isRakeFrenzyActive()"), false);
+    game.elements.get("closeKeybindingsBtn").emit("click");
+    assert.equal(game.run("gameClock.paused"), false);
+    game.key("r"); assert.equal(game.run("isRakeFrenzyActive()"), true);
+    game.key(" "); game.elements.get("keybindingsBtn").emit("click");
+    game.elements.get("closeKeybindingsBtn").emit("click");
+    assert.equal(game.run("gameClock.paused"), true);
+    assert.doesNotThrow(() => createGame({storageBlocked:true}));
+    assert.equal(createGame({storage:new Map([["seedHarvester.keyBindings.v1", "bad"]])}).run("keyBindings.label('pause')"), "Space");
+});
+
+test("Rake Frenzy removes recovery for five active seconds, pauses, and respects its own cooldown", () => {
+    for (const input of ["key", "hud"]) {
+        const game = createCombatGame();
+        game.leftClick(); game.leftClick();
+        assert.equal(game.run("bullets.length"), 1);
+        if (input === "key") game.key("6"); else game.elements.get("abilityRakeFrenzy").emit("click");
+        for (let i=0;i<8;i++) game.leftClick();
+        assert.equal(game.run("bullets.length"), 9);
+        assert.equal(game.run("getCooldownRemainingMs('rakeFrenzy')"), 45000);
+        game.key(" "); game.advance(10000); game.leftClick();
+        assert.equal(game.run("bullets.length"), 9);
+        assert.equal(game.run("isRakeFrenzyActive()"), true);
+        game.key(" "); game.advance(4999); game.leftClick();
+        const count = game.run("bullets.length");
+        game.advance(1); game.leftClick();
+        assert.equal(game.run("isRakeFrenzyActive()"), false);
+        assert.equal(game.run("bullets.length"), count);
+        game.key("6"); assert.equal(game.run("isRakeFrenzyActive()"), false);
+        game.advance(449); game.leftClick();
+        assert.equal(game.run("bullets.length"), count + 1);
+    }
+});
+
+test("cooldown reset pickups clear all six cooldowns once and preserve active effect durations", () => {
+    const game = createCombatGame();
+    game.key("5"); game.leftClick(800,400); game.key("2"); game.key("6");
+    game.run("for (const state of Object.values(abilityState)) state.lastUsedAt = gameClock.elapsedMs; cooldownPickups.push({x:700,y:360,spawnedAt:0});");
+    const before = game.read("({ shield:abilityState.energyShield.activeUntil, lure:abilityState.lure.activeUntil, frenzy:abilityState.rakeFrenzy.activeUntil })");
+    game.run("updateCooldownPickups([{x1:640,y1:360,x2:800,y2:360}])");
+    assert.equal(game.run("cooldownPickups.length"), 0);
+    assert.equal(game.run("Object.keys(abilityState).every(name => getCooldownRemainingMs(name) === 0)"), true);
+    assert.deepEqual(game.read("({ shield:abilityState.energyShield.activeUntil, lure:abilityState.lure.activeUntil, frenzy:abilityState.rakeFrenzy.activeUntil })"), before);
+    assert.equal(game.elements.get("cooldownResetNotice").hidden, false);
+    game.run("abilityState.teleport.lastUsedAt = gameClock.elapsedMs; updateCooldownPickups([{x1:640,y1:360,x2:800,y2:360}]); drawLure()");
+    assert.equal(game.run("getCooldownRemainingMs('teleport')"), 5000);
+    assert.ok(game.drawing.filter(call=>call.name==="arc").every(call=>call.args.every(Number.isFinite)));
+    game.advance(2401);
+    assert.equal(game.elements.get("cooldownResetNotice").hidden, true);
+});
+
+test("cooldown pickups spawn on open ground, scroll, expire and do not advance while paused", () => {
+    const game = createGame({scrolling:true}); game.start();
+    game.run("monsters.length=0; monsterState.nextSpawnAt=Infinity; weaponState.nextShotAt=Infinity; nextHaySpawnAt=Infinity;");
+    game.key(" "); game.advance(30000);
+    assert.equal(game.run("cooldownPickups.length"), 0);
+    game.key(" "); game.advance(25000);
+    assert.equal(game.run("cooldownPickups.length"), 1);
+    assert.ok(game.run("cooldownPickups[0].x >= canvas.width*0.55 && !bodyTouchesWall(cooldownPickups[0].x,cooldownPickups[0].y,24)"));
+    assert.equal(game.run("spawnCooldownPickup()"), false);
+    const x=game.run("cooldownPickups[0].x"); game.advance(50);
+    assert.equal(game.run("cooldownPickups[0].x"), x-2.75);
+    game.advance(18000);
+    assert.equal(game.run("cooldownPickups.length"), 0);
+});
+
+test("Time Freeze stops scrolling walls and pickups while leaving player controls and timers active", () => {
+    const game=createGame({scrolling:true}); game.start();
+    game.run("monsters.length=0; monsterState.nextSpawnAt=Infinity; weaponState.nextShotAt=Infinity; nextHaySpawnAt=Infinity; cooldownPickups.push({x:900,y:400,spawnedAt:0});");
+    game.key("4");
+    const state=game.read("({scroll:worldState.scroll,wall:walls[0].x,pickup:cooldownPickups[0].x})");
+    game.key("d"); game.advance(1000); game.releaseKey("d");
+    assert.deepEqual(game.read("({scroll:worldState.scroll,wall:walls[0].x,pickup:cooldownPickups[0].x})"),state);
+    assert.equal(game.run("player.x"),649);
+    assert.equal(game.run("getCooldownRemainingMs('timeFreeze')"),59000);
+    game.advance(1999);
+    assert.equal(game.run("worldState.scroll"),state.scroll);
+    game.advance(1);
+    assert.ok(game.run("worldState.scroll")>state.scroll);
+});
+
+test("movement and uncapped cooldown upgrades apply immediately while preserving cooldown progress", () => {
+    const game=createCombatGame(); game.run("player.seeds=1000000000");
+    game.elements.get("upgradeMoveSpeed").emit("click");
+    game.key("d"); game.advance(50); game.releaseKey("d");
+    assert.ok(Math.abs(game.run("player.x")-649.9)<1e-8);
+    game.key("2"); game.advance(5000); game.key(" ");
+    const old=game.run("getCooldownRemainingMs('energyShield')");
+    game.elements.get("upgradeCooldown-energyShield").emit("click");
+    assert.ok(Math.abs(game.run("getCooldownRemainingMs('energyShield')")-old*0.98)<1e-8);
+    assert.equal(game.run("abilityState.teleport.cooldownMs"),5000);
+    for(const name of game.read("Object.keys(abilityState)")) {
+        const button=game.elements.get("upgradeCooldown-"+name);
+        for(let i=0;i<50;i++)button.emit("click");
+        const duration=game.run(`abilityState.${name}.cooldownMs`);
+        assert.ok(duration < game.run(`abilityState.${name}.baseCooldownMs`)*0.5);
+        assert.equal(button.getAttribute("aria-disabled"),"false");
+        assert.notEqual(button.textContent,"Max");
+        const seeds=game.run("player.seeds"), cost=Number(button.dataset.cost);button.emit("click");
+        assert.equal(game.run("player.seeds"),seeds-cost);
+        assert.ok(Math.abs(game.run(`abilityState.${name}.cooldownMs`)-duration*0.98)<1e-8);
+    }
+    assert.equal(game.run("gameClock.paused"),true);
+});
+
+test("cooldown reductions stay fractional below one millisecond and never display a zero cooldown", () => {
+    const game=createCombatGame();
+    game.run("abilityState.dash.cooldownMs=0.75; player.seeds=100; purchaseUpgrade('cooldown-dash')");
+    assert.equal(game.run("abilityState.dash.cooldownMs"),0.735);
+    assert.equal(game.elements.get("statCooldown-dash").textContent,"0.000735s");
+    assert.equal(game.run("isUpgradeMaxed('cooldown-dash')"),false);
+});
+
+test("basic attack balance favors rake damage while inexpensive upgrades still improve DPS", () => {
+    const game=createCombatGame();
+    const base=game.run("player.damage*player.fireRate");
+    assert.equal(base,6);
+    game.run("player.seeds=4");
+    game.elements.get("upgradeDamage").emit("click"); game.elements.get("upgradeFireRate").emit("click");
+    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.804)<1e-8);
+    assert.equal(game.run("player.seeds"),0);
+    assert.equal(game.run("getRake().damage"),20);
 });
 
