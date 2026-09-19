@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 250" role="img" aria-labelledby="title desc">
+<title id="title">Left-click to throw, right-click to move</title><desc id="desc">Left-click throws the rake or uses a readied ability. Right-click moves the player; hold it to follow the mouse.</desc>
+<rect x="154" y="24" width="132" height="202" rx="60" fill="#26382d" stroke="#789580" stroke-width="2"/>
+<path d="M158 113 V86 Q158 28 216 28 V113Z" fill="#f3cc70"/><path d="M224 28 Q282 28 282 86 V113 H224Z" fill="#7ccfbc"/>
+<rect x="214" y="55" width="12" height="37" rx="6" fill="#19251e" stroke="#9eb3a3"/>
+<g fill="none" stroke-width="2"><path d="M182 82 H78 V110" stroke="#f3cc70"/><path d="M258 82 H362 V110" stroke="#7ccfbc"/></g>
+<g font-family="Arial,sans-serif" text-anchor="middle"><g fill="#f3cc70"><text x="76" y="136" font-size="15" font-weight="bold">LEFT CLICK</text><text x="76" y="159" font-size="14">Throw rake</text></g><g fill="#7ccfbc"><text x="364" y="136" font-size="15" font-weight="bold">RIGHT CLICK</text><text x="364" y="159" font-size="14">Move</text></g><g fill="#b7c9ba" font-size="12"><text x="76" y="181">Or use a</text><text x="76" y="197">readied ability</text><text x="364" y="181">Hold to follow</text><text x="364" y="197">the cursor</text></g></g>
+</svg>

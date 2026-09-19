@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 250" role="img" aria-labelledby="title desc">
+<title id="title">Left hand on keys 1, 2, 3 and 4</title><desc id="desc">Rest your little, ring, middle and index fingers on the four highlighted number keys. Your thumb can reach Space to pause.</desc>
+<rect x="20" y="16" width="400" height="124" rx="16" fill="#19251e" stroke="#425548"/>
+<g fill="#f3cc70" stroke="#ffe4a5" stroke-width="2"><rect x="43" y="33" width="66" height="52" rx="8"/><rect x="120" y="33" width="66" height="52" rx="8"/><rect x="197" y="33" width="66" height="52" rx="8"/><rect x="274" y="33" width="66" height="52" rx="8"/></g>
+<rect x="351" y="33" width="48" height="52" rx="8" fill="#32483a" stroke="#718572"/>
+<g font-family="Arial,sans-serif" font-size="25" font-weight="bold" text-anchor="middle" fill="#233224"><text x="76" y="65">1</text><text x="153" y="65">2</text><text x="230" y="65">3</text><text x="307" y="65">4</text><text x="375" y="65" fill="#c4d0c3">5</text></g>
+<rect x="94" y="100" width="249" height="25" rx="5" fill="#32483a" stroke="#718572"/><text x="219" y="118" font-family="Arial,sans-serif" font-size="12" text-anchor="middle" fill="#d1decd">SPACE · PAUSE</text>
+<g stroke="#e6b58f" stroke-width="21" stroke-linecap="round" fill="none"><path d="M112 196 L76 91"/><path d="M164 185 L153 91"/><path d="M216 184 L230 91"/><path d="M267 194 L307 91"/></g>
+<path d="M106 176 Q166 153 255 172 L290 192 L331 155 Q341 146 347 157 Q353 164 341 183 L299 231 L136 238 Q111 225 106 176Z" fill="#d39f79" stroke="#e6b58f" stroke-width="3"/>
+<path d="M168 195 Q211 183 252 201 M194 212 Q226 201 257 215" fill="none" stroke="#ab7959" stroke-width="2"/>
+</svg>

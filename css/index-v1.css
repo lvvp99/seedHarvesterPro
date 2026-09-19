@@ -1,0 +1,847 @@
+:root {
+    font-size: 20px;
+}
+
+* {
+    box-sizing: border-box;
+    padding: 0;
+}
+
+[hidden] {
+    display: none !important;
+}
+html {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+}
+html,
+body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    font-family: Arial, sans-serif;
+}
+
+
+#soundControls {
+    width: min(260px, calc(100vw - 24px));
+    padding: 10px 12px;
+    border: 1px solid #68634a;
+    border-radius: 10px;
+    background: rgba(30, 32, 24, 0.94);
+    color: #f5f0db;
+    font-size: 14px;
+    text-align: left;
+}
+
+#soundHome {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    z-index: 11;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+#fullscreenBtn {
+    padding: 9px 12px;
+    border: 1px solid #68634a;
+    border-radius: 8px;
+    background: rgba(30, 32, 24, 0.94);
+    color: #f5f0db;
+    font: 14px Arial, sans-serif;
+    cursor: pointer;
+}
+#fullscreenBtn:hover { border-color: #e7ce76; }
+#fullscreenBtn:focus-visible { outline: 2px solid #e7ce76; outline-offset: 3px; }
+#fullscreenBtn:disabled { color: #b5b4a6; cursor: default; }
+#fullscreenMessage { max-width: 260px; padding: 8px; border-radius: 6px; background: #302c22; color: #ffe5ad; font-size: 13px; }
+
+#soundControls summary { cursor: pointer; user-select: none; }
+#audioStatus { float: right; color: #e7ce76; font-size: 12px; }
+.soundSettings { display: grid; gap: 8px; padding-top: 12px; }
+.soundSettings label { display: flex; justify-content: space-between; }
+.soundSettings input { width: 100%; margin: 0 0 6px; accent-color: #e7ce76; }
+.soundSettings output { color: #d5cfb7; font-variant-numeric: tabular-nums; }
+#muteAudioBtn { padding: 7px; border: 1px solid #8c8055; border-radius: 6px; background: #44412c; color: #fff; font: inherit; cursor: pointer; }
+#soundControls :focus-visible { outline: 2px solid #e7ce76; outline-offset: 3px; }
+#shopSoundSlot { padding: 0 1rem 0.6rem; flex-shrink: 0; }
+#shopSoundSlot #soundControls, #gameOverSoundSlot #soundControls { width: 100%; }
+#shopSoundSlot .soundSettings { grid-template-columns: 90px minmax(0, 1fr); align-items: center; }
+#shopSoundSlot .soundSettings input { margin: 0; }
+#shopSoundSlot #muteAudioBtn { grid-column: 1 / -1; }
+@media (min-width: 700px) {
+    #shopSoundSlot .soundSettings { grid-template-columns: 100px minmax(0, 1fr) 100px minmax(0, 1fr) 80px; gap: 14px; }
+    #shopSoundSlot #muteAudioBtn { grid-column: auto; }
+}
+#gameOverSoundSlot { margin: 1rem 0; }
+
+/* --------------------
+   INITIAL VIEW
+-------------------- */
+
+#initialView {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    padding: clamp(1.2rem, 4vw, 3rem) 1rem;
+    text-align: center;
+    background-color: brown;
+}
+
+#initialView h1 {
+    margin: 0 0 1rem;
+    font-size: clamp(1.8rem, 5vw, 2.5rem);
+}
+
+#initialView > p {
+    max-width: 35rem;
+    margin: 0 0 2rem;
+    text-align: center;
+    line-height: 1.5;
+}
+
+#initialView h2 {
+    margin: 0 0 1.5rem;
+    font-size: 1.5rem;
+}
+
+#initialView > * { flex-shrink: 0; }
+
+.initialChoices {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+    width: min(100%, 64rem);
+    align-items: start;
+}
+
+.characterChooser { min-width: 0; }
+.characterChooser #characterSelection { margin: 0 auto; }
+
+#enemyGuide {
+    padding: 1rem;
+    border: 1px solid #70674a;
+    border-radius: 0.8rem;
+    background: #23291f;
+    color: #f5f0db;
+    text-align: left;
+}
+
+#enemyGuide h2 { margin-bottom: 0.5rem; font-size: 1.2rem; }
+#enemyGuide > p { margin: 0 0 1rem; color: #c7cbbf; font-size: 0.7rem; line-height: 1.5; }
+#enemyList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; margin: 0; list-style: none; }
+.enemyCard { min-width: 0; padding: 0.65rem; border: 1px solid #474d3f; border-top-width: 3px; border-radius: 0.4rem; background: #303729; }
+.enemyCardHeading { display: flex; align-items: center; gap: 0.4rem; }
+#enemyGuide canvas { width: 64px; height: 64px; flex-shrink: 0; cursor: default; }
+.enemyCard h3 { margin: 0 0 0.2rem; font-size: 0.85rem; }
+.enemyArrival { color: #e7ce76; font-size: 0.6rem; }
+.enemyCard p { margin: 0.4rem 0 0; color: #dde1d5; font-size: 0.7rem; line-height: 1.45; }
+
+@media (min-width: 1100px) {
+    .initialChoices { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; }
+}
+
+@media (max-width: 560px) {
+    #enemyList { grid-template-columns: minmax(0, 1fr); }
+    #initialView { padding-bottom: 4rem; }
+}
+
+#characterSelection {
+    display: grid;
+    width: min(100%, 32rem);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+#characterSelection button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 10rem;
+    padding: 1rem;
+    border: 0.1rem solid black;
+    border-radius: 0.5rem;
+    background-color: white;
+    cursor: pointer;
+}
+
+#characterSelection button:hover {
+    transform: scale(1.03);
+}
+
+#characterSelection img {
+    width: min(100%, 6rem);
+    height: 6rem;
+    object-fit: contain;
+}
+
+#characterSelection p {
+    margin: 0;
+    font-size: 0.8rem;
+}
+
+#initialView > .controlsHint {
+    margin: 1.5rem 0 0;
+    font-size: 0.8rem;
+}
+
+@media (max-width: 560px) {
+    #characterSelection {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.6rem;
+    }
+
+    #characterSelection button {
+        min-height: 9rem;
+        padding: 0.75rem;
+    }
+}
+
+
+/* --------------------
+   GAME
+-------------------- */
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+}
+
+
+/* --------------------
+   GAME HUD
+-------------------- */
+
+#gameHud {
+    position: fixed;
+    top: 0;
+    left: 0;
+
+    display: grid;
+    grid-template-columns: auto minmax(8rem, 1fr) auto auto auto;
+    grid-template-areas: "time health abilities seeds shop";
+    align-items: center;
+    gap: 0.8rem;
+
+    width: 100%;
+    min-height: 4rem;
+
+    padding: 0.6rem 1rem;
+
+    background-color: rgba(0, 0, 0, 0.8);
+
+    color: white;
+
+    z-index: 10;
+}
+
+#timeHud {
+    grid-area: time;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 4.5rem;
+}
+
+#timeHud > span:first-child {
+    color: #bbb;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+#gameTime {
+    font-size: 1.1rem;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+}
+
+#gameHud .hudBar {
+    grid-area: health;
+    min-width: 0;
+    font-size: 0.75rem;
+}
+
+#healthText {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+#gameHud #shopBtn {
+    grid-area: shop;
+    padding: 0 0.8rem;
+    white-space: nowrap;
+}
+
+
+/* --------------------
+   HUD BARS
+-------------------- */
+
+.hudBar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    flex: 1;
+}
+
+.hudBar > span:first-child {
+    font-weight: bold;
+    min-width: 3rem;
+}
+
+.barBackground {
+    position: relative;
+
+    flex: 1;
+
+    height: 1rem;
+
+    overflow: hidden;
+
+    border: 0.1rem solid white;
+    border-radius: 0.3rem;
+
+    background-color: #333;
+}
+
+
+/* --------------------
+   HEALTH
+-------------------- */
+
+#healthBar {
+    width: 100%;
+    height: 100%;
+
+    background-color: red;
+}
+
+
+/* --------------------
+   XP
+-------------------- */
+
+#xpBar {
+    width: 0%;
+    height: 100%;
+
+    background-color: dodgerblue;
+}
+
+/* --------------------
+   SEED HUD
+-------------------- */
+
+#seedHud {
+    grid-area: seeds;
+    display: flex;
+    align-items: center;
+
+    gap: 0.4rem;
+
+    padding: 0.4rem 0.7rem;
+
+    border-radius: 0.4rem;
+
+    background-color: #222;
+
+    color: white;
+
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+#seedHud img {
+    width: 1.5rem;
+    height: 1.5rem;
+
+    object-fit: contain;
+}
+
+
+/* --------------------
+   ABILITY HUD
+-------------------- */
+
+#abilityBar {
+    grid-area: abilities;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: center;
+    gap: 8px;
+}
+
+.abilityHudItem {
+    padding: 10px 6px;
+    cursor: pointer;
+    font: inherit;
+    position: relative;
+
+    width: 120px;
+    height: 70px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+
+    border: 0.1rem solid #666;
+    border-radius: 0.5rem;
+
+    background-color: #2b2b2b;
+
+    overflow: hidden;
+}
+
+.abilityHudItem.locked {
+    background-color: #111;
+    border-color: #333;
+    opacity: 0.85;
+}
+
+.abilityHudItem.locked.affordable {
+    border-color: #d7ba68;
+    background: #302d1d;
+    opacity: 1;
+}
+
+.abilityHudItem.active {
+    border-color: #52ffd2;
+    box-shadow: inset 0 0 0 0.1rem #52ffd2;
+}
+
+.abilityHudItem.coolingDown {
+    border-color: #ffb347;
+}
+
+.abilityIconVisual {
+    padding-right: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1.15;
+    color: white;
+}
+
+.abilityKeyCircle {
+    position: absolute;
+
+    right: 3px;
+    top: 3px;
+    width: 15px;
+    height: 15px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid #666;
+    border-radius: 50%;
+
+    background-color: #0f0f0f;
+    color: white;
+
+    font-size: 10px;
+    font-weight: bold;
+
+    z-index: 2;
+}
+
+.abilityCooldownText {
+    display: block;
+    color: #b5c5b8;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1.2;
+    pointer-events: none;
+}
+
+.abilityHudItem.locked .abilityCooldownText { color: #e5c986; }
+.abilityHudItem.coolingDown .abilityCooldownText { color: #ffb347; }
+.abilityHudItem.active .abilityCooldownText { color: #72ffdc; }
+
+.abilityHudItem.armed {
+    border-color: #ffe27d;
+    box-shadow: 0 0 12px rgba(255, 221, 112, 0.4);
+}
+.abilityHudItem.armed .abilityCooldownText { color: #ffe27d; }
+.abilityHudItem:focus-visible { outline: 2px solid #ffe27d; outline-offset: 3px; }
+.abilityHudItem[aria-disabled="true"] { cursor: not-allowed; }
+
+#abilityHint {
+    position: fixed;
+    bottom: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 8;
+    max-width: calc(100vw - 24px);
+    padding: 9px 15px;
+    border: 1px solid #d1bc70;
+    border-radius: 6px;
+    background: rgba(12, 25, 20, 0.82);
+    color: #ffecb0;
+    font: 13px Arial;
+    text-align: center;
+    pointer-events: none;
+}
+
+/* Keep purchases inside the panel, separate from map movement and ability clicks. */
+#statsPanel {
+    position: fixed;
+    left: 10px;
+    top: 102px;
+    z-index: 9;
+    display: flex;
+    flex-direction: column;
+    width: min(330px, calc(100vw - 20px));
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 4px;
+    background: rgba(10, 18, 14, 0.22);
+    color: #f5fff5;
+    font-size: 12px;
+    text-shadow: 0 1px 3px #000;
+    pointer-events: auto;
+    overflow: hidden;
+}
+
+#statsPanel.collapsed {
+    width: auto;
+    padding: 0;
+}
+
+.statsHeader { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-shrink: 0; }
+#statsDragHandle {
+    pointer-events: auto;
+    color: inherit;
+    font: inherit;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 3px;
+    background: rgba(10,18,14,0.35);
+    padding: 6px 8px;
+}
+#statsDragHandle { cursor: grab; touch-action: none; user-select: none; }
+#statsDragHandle.dragging { cursor: grabbing; }
+#statsDragHandle:focus-visible { outline: 2px solid #ffd066; outline-offset: 2px; }
+
+#statsToggle {
+    padding: 6px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 3px;
+    background: rgba(10, 18, 14, 0.35);
+    color: inherit;
+    font: inherit;
+    font-weight: bold;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+#statsToggle:focus-visible {
+    outline: 2px solid #ffd066;
+    outline-offset: 2px;
+}
+
+#statsContent h3 {
+    margin: 10px 0 5px;
+    font-size: 12px;
+    color: #ffd987;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+#statsContent dl {
+    margin: 0;
+}
+
+#statsContent dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+    margin-top: 7px;
+}
+
+#statsContent dt {
+    flex-shrink: 0;
+}
+
+#statsContent dd {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+#statsContent { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+#statsContent small { display: block; font-size: 10px; color: #adc2ab; margin-top: 2px; }
+.statUpgradeButton {
+    flex-shrink: 0;
+    min-width: 70px;
+    padding: 5px 6px;
+    border: 1px solid #bca362;
+    border-radius: 4px;
+    background: rgba(73, 66, 31, 0.6);
+    color: #ffe4a0;
+    font: bold 11px Arial;
+    cursor: pointer;
+}
+.statUpgradeButton[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; border-color: #777566; }
+.statUpgradeButton:focus-visible { outline: 2px solid #ffe4a0; outline-offset: 2px; }
+.statUpgradeButton:not([aria-disabled="true"]):hover { background: rgba(118, 100, 40, 0.8); }
+
+#gameOverDialog {
+    width: min(420px, calc(100% - 2rem));
+    padding: 1.5rem;
+    border: 1px solid #716e49;
+    border-radius: 14px;
+    background: #25291f;
+    color: #f5f3e5;
+    text-align: center;
+}
+
+#gameOverDialog::backdrop {
+    background: rgba(0, 0, 0, 0.65);
+}
+
+#gameOverDialog h2 {
+    margin: 0 0 1rem;
+}
+
+#restartGameBtn {
+    margin-top: 0.5rem;
+    padding: 0.65rem 1rem;
+    border: 0;
+    border-radius: 8px;
+    background: #e7ce76;
+    color: #202318;
+    font: inherit;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.abilityLock {
+    position: absolute;
+
+    top: 0.15rem;
+    left: 0.2rem;
+
+    font-size: 0.9rem;
+
+    z-index: 2;
+}
+
+.abilityHudItem:not(.locked) .abilityLock {
+    display: none;
+}
+
+@media (max-width: 1240px) {
+    #gameHud {
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        grid-template-areas:
+            "time health seeds shop"
+            "abilities abilities abilities abilities";
+        gap: 0.5rem 0.75rem;
+    }
+
+    #seedHud {
+        justify-self: end;
+    }
+
+    .abilityHudItem {
+        width: 100%;
+        height: 64px;
+    }
+}
+
+@media (max-width: 560px) {
+    #gameHud {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas:
+            "time seeds shop"
+            "health health health"
+            "abilities abilities abilities";
+        padding: 0.5rem;
+    }
+
+    #abilityBar {
+        gap: 0.25rem;
+    }
+
+    .abilityHudItem {
+        height: 86px;
+        padding: 19px 3px 5px;
+        gap: 4px;
+    }
+    .abilityIconVisual { padding: 0; font-size: 11px; min-height: 26px; display: flex; align-items: center; }
+    .abilityCooldownText { font-size: 10px; min-height: 24px; }
+
+    #gameHud #shopBtn {
+        padding: 0 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    #gameHud #shopBtn::after {
+        content: " (C)";
+    }
+}
+
+/* Compact HUD and the two-attack layout. */
+#initialView { background: #20271e; color: #f2efd9; }
+.startCard { border: 1px solid #70674a; border-radius: 16px; padding: 28px; background: #303729; }
+.startCard > img { display: block; width: 145px; height: 160px; object-fit: contain; margin: 0 auto 14px; }
+.startCard h2 { margin-bottom: 12px !important; }
+.startCard p { color: #c7cbbf; font-size: 15px; line-height: 1.5; }
+#startGameBtn { background: #f3cb62; color: #24291c; border: 0; border-radius: 8px; padding: 14px 34px; font: bold 18px Arial; cursor: pointer; }
+#startGameBtn:disabled { opacity: .5; cursor: wait; }
+.quickControls { list-style: none; display: grid; gap: 9px; font-size: 14px; line-height: 1.4; text-align: left; padding: 16px; background: #22291f; border-radius: 8px; }
+.quickControls strong { color: #f3d68c; }
+#gameHud { min-height: 44px; padding: 5px 12px; gap: 16px; grid-template-columns: auto minmax(120px,1fr) minmax(160px,1fr) auto auto; grid-template-areas: "time health xp seeds pause"; background: #131a14; }
+#timeHud { min-width: 50px; }
+#timeHud > span:first-child { font-size: 9px; }
+#gameTime { font-size: 15px; }
+#gameHud .hudBar { display: flex; gap: 7px; font-size: 11px; }
+#gameHud .barBackground { width: auto; min-width: 35px; flex: 1; height: 12px; border: 1px solid #4c6650; border-radius: 4px; background: #322c28; overflow: hidden; }
+#healthBar { height: 100%; background: #82c783; }
+#healthText { font-size: 11px; }
+#xpHud { grid-area: xp; display: flex; gap: 9px; align-items: center; }
+#playerLevel { font-size: 14px; white-space: nowrap; color: #ade5ff; }
+.xpDetails { flex: 1; min-width: 45px; }
+#xpMeter { height: 9px; border-radius: 4px; overflow: hidden; background: #283c47; }
+#xpBar { width: 0; height: 100%; background: linear-gradient(90deg,#58aad5,#c0f0ff); transition: width .2s; }
+#xpText { display: block; margin-top: 2px; font-size: 9px; color: #bcd7e5; }
+#seedHud { gap: 5px; padding: 0; background: transparent; font-size: 14px; }
+#seedHud img { width: 22px; height: 22px; }
+#pauseBtn { grid-area: pause; background: #303b2c; color: #f2efd9; border: 1px solid #56694c; border-radius: 5px; padding: 6px 8px; font-size: 11px; cursor: pointer; }
+#pauseOverlay { position: fixed; left: 50%; top: 45%; transform: translate(-50%,-50%); z-index: 20; color: #fff3c3; background: #142015ee; padding: 24px; border: 1px solid #ffe09a; border-radius: 12px; font-size: 20px; pointer-events: none; }
+#bottomHud { position: fixed; bottom: 0; left: 0; width: 100%; z-index: 10; display: grid; grid-template-columns: minmax(120px,1fr) minmax(500px,760px) minmax(120px,1fr); align-items: center; gap: 12px; padding: 8px 12px; color: #f2efd9; background: #131a14; border-top: 1px solid #43543b; }
+#bottomHud #abilityBar { grid-area: auto; grid-column: 2; grid-row: 1; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); width: 100%; gap: 8px; }
+#bottomHud .abilityHudItem { width: 100%; height: 68px; padding: 8px 6px 6px; display: flex; flex-direction: column; justify-content: space-between; gap: 5px; border-radius: 7px; background: #21372a; border: 1px solid #739b71; opacity: 1; }
+#bottomHud .abilityIconVisual { display: block; font-size: 12px; min-height: 0; padding-right: 12px; line-height: 1.2; color: #f7f3df; }
+.abilityIconVisual b { font-size: 15px; }
+#bottomHud .abilityCooldownText { font-size: 10px; min-height: 0; color: #a9e4a3; }
+.abilityProgress { display: block; width: 100%; height: 3px; border-radius: 3px; background: #121a15; overflow: hidden; }
+.abilityProgress > span { display: block; height: 100%; background: #a4dfa0; }
+#bottomHud .abilityHudItem.coolingDown { background: repeating-linear-gradient(135deg,#302923,#302923 8px,#352d25 8px,#352d25 16px); border-color: #b48a52; box-shadow: none; }
+#bottomHud .abilityHudItem.coolingDown .abilityCooldownText { color: #ffca83; }
+.coolingDown .abilityProgress > span { background: #ffc574; }
+#bottomHud .abilityHudItem.armed { background: #403b20; border: 2px solid #ffe785; box-shadow: 0 0 12px #ffe78544; }
+#bottomHud .abilityHudItem.armed .abilityCooldownText { color: #fff0a8; }
+#bottomHud .abilityHudItem.active { background: #19423a; border: 2px solid #5effd2; }
+#bottomHud .abilityHudItem.active .abilityCooldownText { color: #70ffdf; }
+#bottomHud .abilityHudItem.locked { background: #28282a; border-color: #68666c; opacity: .7; }
+#bottomHud .abilityHudItem.locked .abilityCooldownText { color: #d0bacb; }
+#rakeHud { grid-column: 1; grid-row: 1; display: grid; gap: 5px; padding: 0 6px; }
+#rakeName { font-size: 13px; color: #ffe2a1; }
+#rakeStatus { font-size: 11px; }
+#autoTargetToggle { grid-column: 3; grid-row: 1; padding: 9px; font-size: 11px; color: #a9e4a3; background: #263428; border: 1px solid #65815e; border-radius: 5px; cursor: pointer; }
+#autoTargetToggle[aria-pressed="false"] { color: #b7dcff; background: #253342; border-color: #7395b5; }
+#autoTargetToggle:focus-visible { outline: 2px solid #ffe4a0; outline-offset: 2px; }
+#abilityHint { bottom: calc(var(--bottom-hud-height,84px) + 12px); }
+#soundHome { bottom: calc(var(--bottom-hud-height,0px) + 12px); }
+#statsPanel { width: min(250px,calc(100vw - 20px)); padding: 8px; background: rgba(15,28,20,.12); pointer-events: none; font-size: 11px; }
+#statsPanel .statsHeader { pointer-events: none; }
+#statsPanel button { pointer-events: auto; }
+#statsContent h3 { margin-top: 9px; font-size: 11px; }
+#statsContent dl > div { margin: 0; padding: 3px 0; gap: 4px; }
+#statsContent dt, #statsContent dd { font-size: 11px; }
+#statsContent dt { flex-shrink: 1; }
+#statsContent dd { min-width: 0; gap: 4px; }
+#statsContent dd > span { min-width: 0; overflow-wrap: anywhere; }
+#statsContent .rakeEquipped { font-size: 11px; color: #f6dfa4; margin: 4px 0; }
+.weaponUnlocks { display: grid; gap: 5px; margin-top: 5px; }
+.weaponUnlocks > div { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.weaponUnlocks > div > span { min-width: 0; overflow-wrap: anywhere; }
+.weaponUnlocks small { font-size: 9px !important; color: #d1d7c9 !important; }
+.statUpgradeButton.owned { color: #97e3ab; border-color: #5d9972; }
+.statUpgradeButton.affordable { color: #ffe5a0; border-color: #c7a95a; }
+#game { position: absolute; left: 0; top: 0; }
+@media(max-width:850px) {
+    #gameHud { gap: 8px; padding: 5px 8px; grid-template-columns: auto minmax(100px,1fr) minmax(120px,1fr) auto auto; }
+    #bottomHud { grid-template-columns: 1fr 1fr; gap: 6px; padding: 7px; }
+    #bottomHud #abilityBar { grid-column: 1 / -1; grid-row: 2; }
+    #rakeHud { display: flex; gap: 8px; align-items: center; }
+    #autoTargetToggle { grid-column: 2; justify-self: end; }
+}
+
+/* Start screen: play and records first, controls next, enemy reference last. */
+#initialView { padding-bottom: 110px; }
+.initialChoices { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; align-items: stretch; }
+#survivalHistory, #controlsGuide { border: 1px solid #465440; border-radius: 16px; background: #263022; padding: 24px; text-align: left; }
+#initialView #historyHeading, #initialView #controlsHeading { font-size: 22px; margin-bottom: 12px; }
+.bestRecord { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 0; color: #f3cc70; border-bottom: 1px solid #465440; }
+.bestRecord > span { font-size: 14px; }
+.bestRecord strong { font-size: 38px; font-variant-numeric: tabular-nums; }
+#survivalHistory h3 { margin: 18px 0 10px; font-size: 14px; }
+#historyEmpty { color: #bdc9b8; line-height: 1.6; font-size: 14px; padding: 12px 0; }
+#survivalHistoryList { list-style: none; padding: 0; margin: 0; max-height: 220px; overflow-y: auto; }
+#survivalHistoryList li { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 9px 0; border-bottom: 1px solid #3d4938; font-size: 13px; }
+#survivalHistoryList span { color: #bdc9b8; }
+#survivalHistoryList strong { color: #f3efd9; font-variant-numeric: tabular-nums; }
+#historyStorageNote { color: #a5b29f; font-size: 11px; margin: 15px 0 0; }
+#controlsGuide { width: min(100%,64rem); margin-top: 24px; }
+#controlsGuide > p { color: #bdc9b8; font-size: 14px; line-height: 1.6; }
+.controlIllustrations { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px; margin: 18px 0 22px; }
+.controlIllustrations figure { margin: 0; padding: 12px; background: #20291e; border-radius: 12px; }
+.controlIllustrations img { display: block; width: 100%; height: auto; }
+.controlIllustrations figcaption { font-size: 12px; line-height: 1.6; color: #bdc9b8; padding: 4px 8px; }
+.controlIllustrations strong { display: block; font-size: 14px; color: #f3efd9; }
+.abilityControls { list-style: none; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; padding: 0; }
+.abilityControls li { font-size: 12px; line-height: 1.5; }
+.abilityControls small { display: block; padding-left: 29px; color: #bdc9b8; }
+#controlsGuide kbd { display: inline-block; border: 1px solid #6a795e; border-bottom-width: 3px; border-radius: 5px; background: #34422e; padding: 3px 7px; font: bold 12px Arial; color: #f3dc97; }
+.shortcutStrip { display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 18px 0 8px; font-size: 12px; }
+.survivalTip { padding-top: 15px; border-top: 1px solid #465440; margin-top: 14px; }
+#initialView #enemyGuide { width: min(100%,64rem); margin-top: 24px; padding: 24px; border-color: #465440; border-radius: 16px; }
+#initialView #enemyGuide h2 { font-size: 22px; margin-bottom: 8px; }
+#enemyGuide > p { font-size: 14px; }
+#enemyList { grid-template-columns: repeat(3,minmax(0,1fr)); padding: 0; gap: 12px; }
+.enemyCard { border: 0; border-radius: 8px; padding: 12px; background: #2c3527; }
+.enemyCard h3 { font-size: 15px; }
+.enemyArrival { font-size: 11px; color: #bdc9b8; }
+.enemyCard p { font-size: 13px; line-height: 1.5; }
+#enemyGuide canvas { width: 48px; height: 48px; }
+@media(max-width:700px) {
+    .initialChoices, .controlIllustrations { grid-template-columns: minmax(0,1fr); }
+    #enemyList { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .abilityControls { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+    #survivalHistory, #controlsGuide, #initialView #enemyGuide { padding: 18px; }
+}
+@media(max-width:420px) { #enemyList { grid-template-columns: minmax(0,1fr); } }
+@media(max-width:560px) {
+    #gameHud { grid-template-columns: 40px minmax(75px,1fr) minmax(90px,1fr) 28px 65px; gap: 5px; min-height: 46px; }
+    #gameHud .hudBar { display: grid; gap: 2px; grid-template-columns: auto 1fr; }
+    #gameHud .barBackground { grid-column: 2; width: 100%; }
+    #healthText { grid-column: 1 / -1; font-size: 9px; }
+    #pauseBtn { padding: 5px 2px; font-size: 9px; }
+    #seedHud { flex-direction: column; font-size: 10px; gap: 0; }
+    #seedHud img { width: 14px; height: 14px; }
+    #playerLevel { font-size: 12px; }
+    #xpHud { gap: 4px; }
+    #bottomHud #abilityBar { gap: 4px; }
+    #bottomHud .abilityHudItem { height: 76px; padding: 18px 3px 4px; }
+    #bottomHud .abilityIconVisual { font-size: 10px; padding: 0; }
+    #bottomHud .abilityIconVisual b { display: none; }
+    #bottomHud .abilityCooldownText { font-size: 9px; }
+    #soundControls { width: 170px; }
+    #rakeName { font-size: 10px; }
+    #rakeStatus { font-size: 9px; }
+}
+
