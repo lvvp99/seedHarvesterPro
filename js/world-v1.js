@@ -122,6 +122,9 @@ function scrollWorld(deltaMs) {
     worldState.scroll += shift;
     worldState.nextWallX -= shift;
     const carried = [player, ...walls, ...hayStacks, ...harvestPickups, ...cooldownPickups, ...mysteryBoxes, ...healthPotions, ...harvestBursts, ...dashTrail, ...monsters, ...bullets, ...collectionEffects, ...combatEffects, ...wallSparks];
+    carried.push(...abilityBursts);
+    if (abilityState.dash.lastSafe) carried.push(abilityState.dash.lastSafe);
+    for (const trail of teleportTrails) { trail.x1 -= shift; trail.x2 -= shift; }
     if (abilityState.lure.point) carried.push(abilityState.lure.point);
     if (movement.target && !movement.rightButtonDown) carried.push(movement.target);
     for (const item of carried) item.x -= shift;
@@ -185,14 +188,14 @@ function resizeWorld() {
     for (const monster of monsters) Object.assign(monster, freeActorPoint(monster, monster.radius, false));
 }
 
-function moveActor(actor, dx, dy, radius, verticalWrap = false, playerBounds = false) {
+function moveActor(actor, dx, dy, radius, verticalWrap = false, playerBounds = false, ignoreWalls = false) {
     const top = Math.min(gameHudHeight, Math.max(0, canvas.height - 1));
     const bottom = Math.max(top + 1, canvas.height);
     const height = bottom - top;
     const left = Math.min(radius, canvas.width / 2);
     const right = Math.max(left, canvas.width - radius);
     if (playerBounds) actor.x = clamp(actor.x, left, right);
-    const obstacles = wallRects(verticalWrap);
+    const obstacles = ignoreWalls ? [] : wallRects(verticalWrap);
     const count = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 4));
     const segments = [];
     let distance = 0, wrapped = false;

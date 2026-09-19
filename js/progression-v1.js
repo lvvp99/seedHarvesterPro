@@ -76,11 +76,15 @@ function throwRake() {
     if (!canControlPlayer() || (!isRakeFrenzyActive() && gameClock.elapsedMs < rakeState.nextThrowAt)) return false;
     const angle = getPlayerAimAngle();
     const speed = 12 + player.level * 0.12;
-    bullets.push({ kind: "rake", level: player.level, x: player.x, y: player.y,
-        dx: Math.cos(angle) * speed, dy: Math.sin(angle) * speed, angle, size: Math.round(10 + getRake().headWidth * 0.4),
-        damage: getRakeDamage(), piercing: player.unlocks.piercingRound,
-        knockback: player.unlocks.knockback, explosive: player.unlocks.explosiveKernel,
-        bouncesRemaining: player.unlocks.ricochet ? 2 : 0 });
+    const count = isRakeFrenzyActive() ? abilityState.rakeFrenzy.castLevel || 1 : 1;
+    for (let i = 0; i < count; i++) {
+        const shotAngle = angle + (i - (count - 1) / 2) * 0.22;
+        bullets.push({ kind: "rake", level: player.level, x: player.x, y: player.y,
+            dx: Math.cos(shotAngle) * speed, dy: Math.sin(shotAngle) * speed, angle: shotAngle, size: Math.round(10 + getRake().headWidth * 0.4),
+            damage: getRakeDamage(), piercing: player.unlocks.piercingRound,
+            knockback: player.unlocks.knockback, explosive: player.unlocks.explosiveKernel,
+            bouncesRemaining: player.unlocks.ricochet ? 2 : 0 });
+    }
     rakeState.nextThrowAt = gameClock.elapsedMs + rakeState.cooldownMs;
     gameAudio.play("shot");
     updateRakeStatus();

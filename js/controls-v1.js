@@ -50,7 +50,7 @@ const keyBindings = (() => {
         message(names[action] + " bound to " + label(action) + "."); persist(); refresh(); return true;
     }
     function open() {
-        if (dialog.open || gameOver || isMysteryChoiceOpen()) return;
+        if (dialog.open || gameOver || isMysteryChoiceOpen() || isAbilityGuideOpen()) return;
         waitingFor = null; message("Select a control, then press its new key. Each key can have one action.");
         dialog.showModal(); updateGamePauseState(); refresh();
     }

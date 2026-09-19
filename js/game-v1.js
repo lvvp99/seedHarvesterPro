@@ -48,7 +48,8 @@ const statFields = {
     criticalChance: document.getElementById("statCriticalChance"),
     weaponEffects: document.getElementById("statWeaponEffects"),
     rakeName: document.getElementById("statRakeName"),
-    rakeDamage: document.getElementById("statRakeDamage")
+    rakeDamage: document.getElementById("statRakeDamage"),
+    seedValue: document.getElementById("statSeedValue")
 };
 
 const upgradeButtons = [...document.querySelectorAll(".statUpgradeButton")];
@@ -112,6 +113,7 @@ const player = {
     maxHealth: 100,
 
     seeds: 0,
+    seedMultiplier: 1,
     level: 1,
     xp: 0,
     totalXp: 0,
@@ -191,12 +193,6 @@ for (const state of Object.values(abilityState)) state.baseCooldownMs = state.co
 let armedAbility = null;
 const abilityLabels = { teleport: "Teleport", energyShield: "Energy Shield", dash: "Dash", timeFreeze: "Time Freeze", lure: "Lure", rakeFrenzy: "Rake Frenzy" };
 const instantAbilities = new Set(["energyShield", "timeFreeze", "rakeFrenzy"]);
-const abilityInstructions = {
-    rakeFrenzy: "Throw rakes with no recovery for 5 seconds. Click rapidly!",
-    teleport: "Left-click to teleport to the marker.", energyShield: "Instantly shield yourself for 2 seconds.",
-    dash: "Left-click to sprint towards the cursor.", timeFreeze: "Instantly freeze enemies and map scrolling for 3 seconds.",
-    lure: "Left-click on open ground to plant a lure at the cursor for 10 seconds."
-};
 const dashTrail = [];
 
 const abilitySoundState = Object.fromEntries(Object.keys(abilityState)
@@ -364,6 +360,7 @@ function updateGameClock(now = performance.now()) {
     }
 
     gameClock.lastUpdatedAt = now;
+    if (gameStarted && !gameOver) abilityProgress.awardMinutes(gameClock.elapsedMs);
 
     const totalSeconds = Math.floor(gameClock.elapsedMs / 1000);
     const seconds = String(totalSeconds % 60).padStart(2, "0");
@@ -381,8 +378,8 @@ function updateGameClock(now = performance.now()) {
 function updateGamePauseState() {
     // Account for the last active interval before entering or leaving a pause.
     updateGameClock();
-    gameClock.paused = !gameStarted || gameOver || manuallyPaused || keyBindings.isOpen() || isMysteryChoiceOpen() || document.hidden;
-    gameAudio.setScene(gameOver ? "over" : !gameStarted ? "menu" : (manuallyPaused || keyBindings.isOpen() || isMysteryChoiceOpen()) ? "paused" : "play");
+    gameClock.paused = !gameStarted || gameOver || manuallyPaused || keyBindings.isOpen() || isMysteryChoiceOpen() || isAbilityGuideOpen() || document.hidden;
+    gameAudio.setScene(gameOver ? "over" : !gameStarted ? "menu" : (manuallyPaused || keyBindings.isOpen() || isMysteryChoiceOpen() || isAbilityGuideOpen()) ? "paused" : "play");
 
     if (gameClock.paused) {
         cancelMovement();
@@ -402,6 +399,7 @@ function endGame() {
     updateGameClock();
     gameOver = true;
     dismissMysteryChoice();
+    if (isAbilityGuideOpen()) document.getElementById("abilityGuideDialog").close();
     gameClock.paused = true;
     survivalHistory.save(gameClock.elapsedMs, true);
     cancelMovement();
@@ -464,6 +462,8 @@ function getHaySeedAmount(elapsedMs) {
         + Math.floor(Math.random() * (haySettings.maxSeeds - haySettings.minSeeds + 1));
 }
 
+function getStackSeedAmount(stack) { return Math.max(1, Math.round(stack.seeds * player.seedMultiplier)); }
+
 function spawnHayStack(incoming = worldState.started) {
     if (hayStacks.length >= haySettings.maxStacks) {
         return;
@@ -513,7 +513,7 @@ function updateHayStacks(previousX = player.x, previousY = player.y, segments = 
         });
 
         if (touched) {
-            const amount = Math.max(1, Math.round(stack.seeds));
+            const amount = getStackSeedAmount(stack);
             player.seeds += amount;
             collectionEffects.push({
                 x: stack.x,
@@ -575,7 +575,7 @@ function updateHarvestPickups(segments) {
             const stack = hayStacks[j];
             // Collect the hay on the map, leaving stacks that have not entered it yet.
             if (stack.x < 0 || stack.x > canvas.width || stack.y < gameHudHeight || stack.y > canvas.height) continue;
-            total += Math.max(1, Math.round(stack.seeds));
+            total += getStackSeedAmount(stack);
             harvestBursts.push({ x: stack.x, y: stack.y, createdAt: gameClock.elapsedMs });
             hayStacks.splice(j, 1);
         }
@@ -712,6 +712,7 @@ function startGame() {
         initialView.hidden = true;
         canvas.hidden = false; gameHud.hidden = false; bottomHud.hidden = false; statsPanel.hidden = false;
         gameStarted = true;
+        abilityProgress.beginRun();
         survivalHistory.begin();
         resizeGameCanvas(); startScrollingWorld(); updateGamePauseState();
         for (let i=0; i<haySettings.initialStacks; i++) spawnHayStack(false);
@@ -771,8 +772,11 @@ function updateAbilityHud() {
         hud.item.setAttribute("aria-pressed", String(instant ? active : armed));
         hud.item.setAttribute("aria-disabled", String(!unlocked || !canControlPlayer() || remaining > 0 || abilityState.dash.remainingMs > 0));
         hud.item.setAttribute("aria-label", key + ": " + abilityLabels[name]);
-        hud.item.title = (instant ? "Click or press " : "Select or press ") + key + ". " + abilityInstructions[name]
-            + " Cooldown: " + state.cooldownMs / 1000 + " seconds.";
+        const level = getAbilityLevel(name);
+        hud.item.dataset.level = String(level);
+        document.getElementById(name + "Level").textContent = "Lv " + level;
+        document.getElementById(name + "HudIcon").textContent = abilityCatalog[name].icons[level - 1];
+        hud.item.title = "Level " + level + ": " + abilityCatalog[name].levels[level - 1] + " Cooldown: " + Number((state.cooldownMs / 1000).toPrecision(3)) + "s. " + (instant ? "Click or press " : "Select or press ") + key + ".";
         hud.item.classList.toggle("coolingDown", !active && remaining > 0);
         const statusLabel = !unlocked ? "🔒 Locked" : armed ? "➤ Armed · click map"
             : active ? "◆ Active" + (state.durationMs ? " · " + Math.ceil((state.activeUntil - gameClock.elapsedMs) / 1000) + "s" : "")
@@ -798,7 +802,8 @@ function updateStatsPanel() {
         criticalChance: Number((player.criticalChance * 100).toFixed(1)) + "%",
         weaponEffects: effects.join(" · ") || "None",
         rakeName: getRake().name,
-        rakeDamage: getRakeDamage().toString()
+        rakeDamage: getRakeDamage().toString(),
+        seedValue: Number(player.seedMultiplier.toFixed(2)) + "×"
     };
     for (const [name, value] of Object.entries(values)) {
         if (statFields[name].textContent !== value) statFields[name].textContent = value;
@@ -819,6 +824,7 @@ function updateStatsPanel() {
         upgrade.button.setAttribute("aria-label", owned ? upgrade.label + " purchased" : maxed ? upgrade.label + " at maximum" : (upgrade.repeatable ? "Upgrade " : "Unlock ") + upgrade.label + " for " + upgrade.cost + " seeds");
         upgrade.button.title = owned ? "Applies only to your thrown rake." : maxed ? "Maximum upgrade reached" : upgrade.label + ": " + upgrade.cost + " seeds. " + (upgrade.button.dataset.benefit || "");
     }
+    updateRakeLoadout();
 }
 
 statsToggle.addEventListener("click", function() {
@@ -927,7 +933,7 @@ document.addEventListener("fullscreenchange", () => {
 function updateSeedCount() { seedHudCount.textContent = Math.floor(player.seeds); }
 
 function togglePause() {
-    if (!gameStarted || gameOver || isMysteryChoiceOpen()) return;
+    if (!gameStarted || gameOver || isMysteryChoiceOpen() || isAbilityGuideOpen()) return;
     manuallyPaused = !manuallyPaused;
     document.getElementById("pauseOverlay").hidden = !manuallyPaused;
     keyBindings.refresh();
@@ -949,7 +955,7 @@ window.addEventListener("pagehide", () => {
 window.addEventListener("blur", cancelMovement);
 
 function toggleAutomaticTarget() {
-    if (!gameStarted || gameOver || isMysteryChoiceOpen() || document.hidden) return;
+    if (!gameStarted || gameOver || isMysteryChoiceOpen() || isAbilityGuideOpen() || document.hidden) return;
     weaponState.automaticTarget = !weaponState.automaticTarget;
     weaponState.target = null;
     weaponState.nextTargetSearchAt = 0;
@@ -960,6 +966,7 @@ function toggleAutomaticTarget() {
 autoTargetToggle.addEventListener("click", toggleAutomaticTarget);
 
 function applyUpgrade(upgrade) {
+    if (upgrade === "seedValue") player.seedMultiplier *= 1.2;
     if (upgrade === "moveSpeed") player.speed = Math.min(8, player.speed * (1 + upgradeRates.moveSpeed));
     if (upgrade.startsWith("cooldown-")) {
         const state = abilityState[upgrade.slice(9)];
@@ -1008,7 +1015,7 @@ function applyUpgrade(upgrade) {
 
 function canPurchaseUpgrades() {
     // Spending seeds is allowed during a manual pause without resuming combat.
-    return gameStarted && !gameOver && !isMysteryChoiceOpen() && !document.hidden;
+    return gameStarted && !gameOver && !isMysteryChoiceOpen() && !isAbilityGuideOpen() && !document.hidden;
 }
 
 function isUpgradeMaxed(name) {
@@ -1041,7 +1048,7 @@ for (const [name, upgrade] of Object.entries(statsUpgrades)) {
 function canUseAbility(name) {
     if (!canControlPlayer()) return false;
     const ready = player.unlocks[name] && !isAbilityOnCooldown(name) && abilityState.dash.remainingMs === 0;
-    if (!ready) gameAudio.play("denied");
+    if (!ready) { gameAudio.play("denied"); showCooldownFeedback(name); }
     return ready;
 }
 
@@ -1114,7 +1121,9 @@ function useTeleport() {
     const point = freeActorPoint(clampPointToCanvas(mouse.x, mouse.y), player.size / 2);
     if (bodyTouchesWall(point.x, point.y, player.size / 2)) { gameAudio.play("denied"); return; }
     gameAudio.play("teleport");
+    const origin = { x: player.x, y: player.y };
     Object.assign(player, point);
+    leaveTeleportEffects(origin, point);
     abilityState.teleport.lastUsedAt = gameClock.elapsedMs;
     resetMovementAfterAbility();
     updateAbilityHud();
@@ -1135,8 +1144,12 @@ function useDash(targetX, targetY) {
     const distance = Math.hypot(dx, dy);
     if (distance === 0) return;
     gameAudio.play("dash");
-    // 140 pixels over 0.2 seconds: fast movement through every collision and pickup step.
-    abilityState.dash.remainingMs = 200;
+    const phaseWalls = getAbilityLevel("dash") >= 2;
+    const reach = phaseWalls ? planPhaseDash(dx / distance, dy / distance, getDashReach()) : getDashReach();
+    if (reach <= 0) return;
+    abilityState.dash.phaseWalls = phaseWalls;
+    abilityState.dash.lastSafe = { x: player.x, y: player.y };
+    abilityState.dash.remainingMs = Math.round(reach / 0.7 * 1000000) / 1000000;
     abilityState.dash.directionX = dx / distance;
     abilityState.dash.directionY = dy / distance;
     abilityState.dash.lastUsedAt = gameClock.elapsedMs;
@@ -1157,6 +1170,7 @@ function isRakeFrenzyActive() { return gameClock.elapsedMs < abilityState.rakeFr
 function useRakeFrenzy() {
     if (!canUseAbility("rakeFrenzy")) return;
     abilityState.rakeFrenzy.lastUsedAt = gameClock.elapsedMs;
+    abilityState.rakeFrenzy.castLevel = getAbilityLevel("rakeFrenzy");
     abilityState.rakeFrenzy.activeUntil = gameClock.elapsedMs + 5000;
     rakeState.nextThrowAt = gameClock.elapsedMs;
     gameAudio.play("ready"); updateAbilityHud(); updateRakeStatus();
@@ -1175,6 +1189,9 @@ function useLure() {
     if (!canUseAbility("lure")) return;
     if (!isLurePlacementValid(mouse)) { gameAudio.play("denied"); return; }
     gameAudio.play("lure");
+    if (abilityState.lure.point && abilityState.lure.castLevel >= 3) abilityExplosion(abilityState.lure.point, 170, abilityState.lure.explosionDamage);
+    abilityState.lure.castLevel = getAbilityLevel("lure");
+    abilityState.lure.explosionDamage = getRakeDamage() * 4;
     abilityState.lure.point = { x: mouse.x, y: mouse.y };
     abilityState.lure.lastUsedAt = gameClock.elapsedMs;
     abilityState.lure.activeUntil = gameClock.elapsedMs + abilityState.lure.durationMs;
@@ -1188,7 +1205,10 @@ function getMonsterTarget() {
 }
 
 function updateLure() {
-    if (!isLureActive()) abilityState.lure.point = null;
+    if (abilityState.lure.point && !isLureActive()) {
+        if (abilityState.lure.castLevel >= 3) abilityExplosion(abilityState.lure.point, 170, abilityState.lure.explosionDamage);
+        abilityState.lure.point = null;
+    }
 }
 
 function drawLure() {
@@ -1211,7 +1231,7 @@ function drawLureMarker(point, preview = false) {
     ctx.font = "bold 32px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("✦", point.x, point.y);
+    ctx.fillText(abilityCatalog.lure.icons[(preview ? getAbilityLevel("lure") : abilityState.lure.castLevel || 1) - 1], point.x, point.y);
     ctx.font = "bold 14px Arial";
     const label = preview ? (valid ? "Lure · left-click" : "Choose open ground")
         : "Lure · " + Math.ceil((abilityState.lure.activeUntil - gameClock.elapsedMs) / 1000) + "s";
@@ -1227,6 +1247,7 @@ function drawLureMarker(point, preview = false) {
 
 function drawDashPreview() {
     const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+    const reach = getDashReach();
     ctx.save();
     ctx.strokeStyle = "#ffd36b";
     ctx.fillStyle = "#ffe5a3";
@@ -1237,8 +1258,8 @@ function drawDashPreview() {
     ctx.translate(player.x, player.y);
     ctx.rotate(angle);
     ctx.beginPath();
-    ctx.moveTo(player.size / 2 + 4, 0); ctx.lineTo(140, 0);
-    ctx.moveTo(127, -8); ctx.lineTo(140, 0); ctx.lineTo(127, 8);
+    ctx.moveTo(player.size / 2 + 4, 0); ctx.lineTo(reach, 0);
+    ctx.moveTo(reach - 13, -8); ctx.lineTo(reach, 0); ctx.lineTo(reach - 13, 8);
     ctx.stroke();
     ctx.restore();
     // Two forward chevrons make Dash distinct from Teleport's circular marker.
@@ -1295,7 +1316,7 @@ function drawDashTrail() {
 // --------------------
 
 window.addEventListener("keydown", function(event) {
-    if (!gameStarted || gameOver || keyBindings.isOpen() || isMysteryChoiceOpen() || event.ctrlKey || event.altKey || event.metaKey) return;
+    if (!gameStarted || gameOver || keyBindings.isOpen() || isMysteryChoiceOpen() || isAbilityGuideOpen() || event.ctrlKey || event.altKey || event.metaKey) return;
     if (event.target?.closest?.("input, textarea, select, [contenteditable], #soundControls")) return;
     const action = keyBindings.actionFor(event);
     if (!action) return;
@@ -1458,10 +1479,15 @@ function movePlayer(deltaMs = 1000 / 60) {
     const dash = abilityState.dash;
     if (dash.remainingMs > 0) {
         const ms = Math.min(deltaMs, 50, dash.remainingMs);
-        const travel = movePlayerBy(dash.directionX * ms * 0.7, dash.directionY * ms * 0.7);
+        const travel = dash.phaseWalls ? moveActor(player, dash.directionX * ms * 0.7, dash.directionY * ms * 0.7, player.size / 2, true, true, true)
+            : movePlayerBy(dash.directionX * ms * 0.7, dash.directionY * ms * 0.7);
         if (ms > 0) dashTrail.push({ x: player.x, y: player.y, createdAt: gameClock.elapsedMs });
         dash.remainingMs = Math.max(0, dash.remainingMs - ms);
         if (ms > 0 && travel.distance < 0.01) dash.remainingMs = 0;
+        if (dash.phaseWalls) {
+            if (!bodyTouchesWall(player.x, player.y, player.size / 2, true)) Object.assign(dash.lastSafe, { x: player.x, y: player.y });
+            else if (dash.remainingMs === 0) Object.assign(player, freeActorPoint(dash.lastSafe, player.size / 2));
+        }
         return travel;
     }
     const step = player.speed * Math.min(deltaMs, 50) / (1000 / 60);
@@ -1590,6 +1616,7 @@ function draw() {
     drawCooldownPickups();
     drawLootPickups();
     drawWalls();
+    drawAbilityEffects();
     drawMovementTarget();
     drawLure();
     drawMonsters();
@@ -1712,6 +1739,7 @@ function gameLoop() {
             updateHarvestPickups(travel.segments);
             updateCooldownPickups(travel.segments);
             updateLure();
+            updateAbilityEffects(deltaMs);
             updateCombatEffects();
             updateMonsterContact();
             updateDeathZone(frameMs);
@@ -1723,6 +1751,8 @@ function gameLoop() {
     updateStatsPanel();
     updateRakeStatus();
     updateCooldownPickupHud();
+
+    updateCooldownFeedback();
 
     requestAnimationFrame(
         gameLoop
@@ -1751,3 +1781,4 @@ window.addEventListener("wheel", event => {
     event.preventDefault(); statsContent.scrollTop += event.deltaY;
 }, { passive: false });
 keyBindings.init();
+abilityProgress.init();

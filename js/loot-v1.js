@@ -1,7 +1,7 @@
 const mysteryBoxes = [];
 const healthPotions = [];
 const lootSettings = { mysteryLifetimeMs: 7000, potionLifetimeMs: 20000, potionHealing: 35, radius: 24 };
-const lootState = { nextMysteryAt: 20000, nextPotionAt: 12000, choosing: false, choices: [] };
+const lootState = { nextMysteryAt: 20000, nextPotionAt: 12000, choosing: false, choices: [], rerolls: 0 };
 const mysteryDialog = document.getElementById("mysteryDialog");
 const mysteryCards = [0, 1, 2].map(index => ({
     button: document.getElementById("mysteryCard" + index),
@@ -80,13 +80,20 @@ function getMysteryBonuses() {
     return bonuses;
 }
 
-function openMysteryChoice() {
-    if (!canControlPlayer() || lootState.choosing) return false;
+function rollMysteryChoices(previous = []) {
     const pool = getMysteryBonuses();
-    // Draw without replacement: every box presents three distinct, usable bonuses.
+    const unseen = pool.filter(bonus => !previous.includes(bonus.id));
+    const seen = pool.filter(bonus => previous.includes(bonus.id));
     lootState.choices = [];
-    for (let i = 0; i < 3; i++) lootState.choices.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-    lootState.choosing = true;
+    for (let i = 0; i < 3; i++) {
+        const options = unseen.length ? unseen : seen;
+        lootState.choices.push(options.splice(Math.floor(Math.random() * options.length), 1)[0]);
+    }
+}
+
+function getMysteryRerollCost() { return 50 * 2 ** lootState.rerolls; }
+
+function renderMysteryChoices() {
     for (const [index, bonus] of lootState.choices.entries()) {
         const card = mysteryCards[index];
         card.button.disabled = false;
@@ -94,6 +101,29 @@ function openMysteryChoice() {
         card.icon.textContent = bonus.icon; card.kind.textContent = bonus.kind;
         card.title.textContent = bonus.name; card.description.textContent = bonus.description;
     }
+    const cost = getMysteryRerollCost(), button = document.getElementById("rerollMysteryBtn");
+    const hasNewBonuses = getMysteryBonuses().some(bonus => !lootState.choices.some(choice => choice.id === bonus.id));
+    button.textContent = "Reroll · " + cost + " seeds";
+    button.disabled = !hasNewBonuses || player.seeds < cost;
+    document.getElementById("mysterySeedBalance").textContent = Math.floor(player.seeds);
+    document.getElementById("rerollMessage").textContent = !hasNewBonuses ? "All remaining bonuses are already shown."
+        : player.seeds < cost ? "Need " + (cost - Math.floor(player.seeds)) + " more seeds." : "New choices · cost doubles each reroll.";
+}
+
+function rerollMysteryChoices() {
+    if (!lootState.choosing || gameOver || document.hidden) return false;
+    const previous = lootState.choices.map(bonus => bonus.id), cost = getMysteryRerollCost();
+    if (player.seeds < cost || !getMysteryBonuses().some(bonus => !previous.includes(bonus.id))) return false;
+    player.seeds -= cost; lootState.rerolls++;
+    rollMysteryChoices(previous); renderMysteryChoices(); updateSeedCount(); gameAudio.play("purchase");
+    return true;
+}
+document.getElementById("rerollMysteryBtn").addEventListener("click", rerollMysteryChoices);
+
+function openMysteryChoice() {
+    if (!canControlPlayer() || lootState.choosing) return false;
+    lootState.rerolls = 0; rollMysteryChoices(); lootState.choosing = true;
+    renderMysteryChoices();
     updateGamePauseState(); updateAbilityHud(); updateStatsPanel();
     mysteryDialog.showModal();
     gameAudio.play("open");

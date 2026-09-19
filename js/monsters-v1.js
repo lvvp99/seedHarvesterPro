@@ -136,13 +136,15 @@ function updateMonsters(deltaMs) {
     const destination = getMonsterTarget();
     const targetRadius = isLureActive() ? 7 : player.size * 0.35;
     for (const monster of monsters) {
-        const speedMultiplier = chargerSpeedMultiplier(monster, seconds * 1000, destination);
+        const pulled = isLureActive() && abilityState.lure.castLevel >= 2;
+        const speedMultiplier = pulled ? 1 : chargerSpeedMultiplier(monster, seconds * 1000, destination);
         const target = monsterNavigationTarget(monster, destination);
         const dx = target.x - monster.x;
         const dy = target.y - monster.y;
         const distance = Math.hypot(dx, dy);
         const stopRadius = target === destination ? monster.radius + targetRadius : 0;
-        const step = Math.min(monster.speed * speedMultiplier * seconds, Math.max(0, distance - stopRadius));
+        const speed = pulled ? Math.max(420, monster.speed * 4) : monster.speed * speedMultiplier;
+        const step = Math.min(speed * seconds, Math.max(0, distance - stopRadius));
         if (distance > 0) {
             moveActor(monster, dx / distance * step, dy / distance * step, monster.radius);
         }
