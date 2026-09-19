@@ -1,0 +1,196 @@
+const mysteryBoxes = [];
+const healthPotions = [];
+const lootSettings = { mysteryLifetimeMs: 7000, potionLifetimeMs: 20000, potionHealing: 35, radius: 24 };
+const lootState = { nextMysteryAt: 20000, nextPotionAt: 12000, choosing: false, choices: [] };
+const mysteryDialog = document.getElementById("mysteryDialog");
+const mysteryCards = [0, 1, 2].map(index => ({
+    button: document.getElementById("mysteryCard" + index),
+    icon: document.getElementById("mysteryIcon" + index),
+    kind: document.getElementById("mysteryKind" + index),
+    title: document.getElementById("mysteryTitle" + index),
+    description: document.getElementById("mysteryDescription" + index)
+}));
+
+function isMysteryChoiceOpen() { return lootState.choosing; }
+
+function findLootPosition() {
+    if (canvas.width < 200 || canvas.height - gameHudHeight < 150) return null;
+    for (let attempt = 0; attempt < 20; attempt++) {
+        const point = findHayPosition();
+        if (!point) return null;
+        if (point.x < Math.max(canvas.width * 0.45, getDeathZoneWidth() + 60)) continue;
+        if ([...mysteryBoxes, ...healthPotions, ...harvestPickups, ...cooldownPickups]
+            .some(pickup => Math.hypot(pickup.x - point.x, pickup.y - point.y) < 75)) continue;
+        return point;
+    }
+    return null;
+}
+
+function spawnMysteryBox() {
+    if (mysteryBoxes.length || lootState.choosing) return false;
+    const point = findLootPosition();
+    if (!point) return false;
+    mysteryBoxes.push({ ...point, spawnedAt: gameClock.elapsedMs });
+    gameAudio.play("ready");
+    return true;
+}
+
+function spawnHealthPotion() {
+    if (healthPotions.length >= 2) return false;
+    const point = findLootPosition();
+    if (!point) return false;
+    healthPotions.push({ ...point, spawnedAt: gameClock.elapsedMs });
+    gameAudio.play("hay");
+    return true;
+}
+
+function restoreHealth(amount) {
+    const restored = Math.min(amount, Math.max(0, player.maxHealth - player.health));
+    if (restored <= 0) return 0;
+    player.health += restored;
+    collectionEffects.push({ x: player.x, y: player.y - 28, label: "+" + restored + " HP", collectedAt: gameClock.elapsedMs });
+    gameAudio.play("collect"); updateHud();
+    return restored;
+}
+
+function getMysteryBonuses() {
+    const bonuses = [
+        { id: "seeds", icon: "🌾", kind: "Seed stash", name: "Golden harvest", description: "Gain 1,000 seeds to spend on upgrades.",
+            apply() { player.seeds += 1000; } },
+        { id: "vitality", icon: "♥", kind: "For this run", name: "Deep roots", description: "Gain 25 maximum HP and restore 25 HP.",
+            apply() { player.maxHealth += 25; restoreHealth(25); } },
+        { id: "rakePower", icon: "✦", kind: "For this run", name: "Sharpened tines", description: "Your thrown rake deals 15% more damage, including at future levels.",
+            apply() { player.rakeDamageMultiplier *= 1.15; } }
+    ];
+    if (player.health < player.maxHealth) bonuses.push({ id: "heal", icon: "✚", kind: "Recovery", name: "Second wind", description: "Restore all your missing health.",
+        apply() { restoreHealth(player.maxHealth); } });
+    if (player.level < maxPlayerLevel) bonuses.push({ id: "level", icon: "↑", kind: "Level up", name: "Growing season", description: "Gain one character level and evolve your rake.",
+        apply() { awardXp(getXpRequired()); } });
+    if (Object.keys(abilityState).some(name => getCooldownRemainingMs(name) > 0)) bonuses.push({ id: "cooldowns", icon: "↻", kind: "Instant recharge", name: "Fresh start", description: "Reset all six ability cooldowns immediately.",
+        apply() { resetAbilityCooldowns(); } });
+    for (const [id, icon, name, description] of [
+        ["piercingRound", "➶", "Piercing Round", "Unlock the rake effect that passes through one enemy to hit another."],
+        ["knockback", "➜", "Knockback", "Unlock the rake effect that pushes enemies back on impact."],
+        ["explosiveKernel", "✹", "Explosive Kernel", "Unlock the rake effect that deals splash damage to nearby enemies."],
+        ["ricochet", "⤴", "Ricochet", "Unlock up to two wall bounces for every rake you throw."]
+    ]) {
+        if (!player.unlocks[id]) bonuses.push({ id, icon, kind: "Free rake effect", name, description,
+            apply() { player.unlocks[id] = true; } });
+    }
+    return bonuses;
+}
+
+function openMysteryChoice() {
+    if (!canControlPlayer() || lootState.choosing) return false;
+    const pool = getMysteryBonuses();
+    // Draw without replacement: every box presents three distinct, usable bonuses.
+    lootState.choices = [];
+    for (let i = 0; i < 3; i++) lootState.choices.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    lootState.choosing = true;
+    for (const [index, bonus] of lootState.choices.entries()) {
+        const card = mysteryCards[index];
+        card.button.disabled = false;
+        card.button.setAttribute("aria-label", bonus.name + ". " + bonus.description);
+        card.icon.textContent = bonus.icon; card.kind.textContent = bonus.kind;
+        card.title.textContent = bonus.name; card.description.textContent = bonus.description;
+    }
+    updateGamePauseState(); updateAbilityHud(); updateStatsPanel();
+    mysteryDialog.showModal();
+    gameAudio.play("open");
+    return true;
+}
+
+function chooseMysteryBonus(index) {
+    if (!lootState.choosing || !gameStarted || gameOver || document.hidden) return false;
+    const bonus = lootState.choices[index];
+    if (!bonus) return false;
+    // Consume the choice before applying it so rapid or repeated clicks cannot grant it twice.
+    lootState.choosing = false;
+    lootState.choices = [];
+    for (const card of mysteryCards) card.button.disabled = true;
+    bonus.apply();
+    collectionEffects.push({ x: player.x, y: player.y - 50, label: bonus.name + "!", collectedAt: gameClock.elapsedMs });
+    gameAudio.play("unlock");
+    mysteryDialog.close();
+    updateGamePauseState(); updateHud(); updateProgressionHud(); updateStatsPanel(); updateAbilityHud();
+    document.activeElement?.blur();
+    return true;
+}
+
+function dismissMysteryChoice() {
+    lootState.choosing = false; lootState.choices = [];
+    if (mysteryDialog.open) mysteryDialog.close();
+}
+
+for (let index = 0; index < mysteryCards.length; index++) {
+    mysteryCards[index].button.addEventListener("click", () => chooseMysteryBonus(index));
+}
+mysteryDialog.addEventListener("cancel", event => event.preventDefault());
+mysteryDialog.addEventListener("close", () => {
+    // A reward must be selected; Escape or an incidental close cannot bypass it.
+    if (lootState.choosing && !gameOver) mysteryDialog.showModal();
+});
+
+function updateLootPickups(segments) {
+    if (!canControlPlayer()) return;
+    for (const [pickups, lifetime] of [[mysteryBoxes, lootSettings.mysteryLifetimeMs], [healthPotions, lootSettings.potionLifetimeMs]]) {
+        for (let i = pickups.length - 1; i >= 0; i--) {
+            if (gameClock.elapsedMs - pickups[i].spawnedAt >= lifetime || pickups[i].x < -32) pickups.splice(i, 1);
+        }
+    }
+    if (gameClock.elapsedMs >= lootState.nextMysteryAt) {
+        const spawned = spawnMysteryBox();
+        lootState.nextMysteryAt = gameClock.elapsedMs + (spawned ? 35000 + Math.random() * 20000 : 3000);
+    }
+    if (gameClock.elapsedMs >= lootState.nextPotionAt) {
+        const spawned = spawnHealthPotion();
+        lootState.nextPotionAt = gameClock.elapsedMs + (spawned ? 18000 + Math.random() * 12000 : 3000);
+    }
+    for (let i = healthPotions.length - 1; i >= 0; i--) {
+        if (player.health >= player.maxHealth || !pathTouchesPickup(healthPotions[i], segments, player.size / 2 + 19)) continue;
+        healthPotions.splice(i, 1); restoreHealth(lootSettings.potionHealing);
+    }
+    for (let i = mysteryBoxes.length - 1; i >= 0; i--) {
+        if (!pathTouchesPickup(mysteryBoxes[i], segments, player.size / 2 + lootSettings.radius)) continue;
+        mysteryBoxes.splice(i, 1);
+        openMysteryChoice();
+        break;
+    }
+}
+
+function resizeLootPickups() {
+    for (const pickups of [mysteryBoxes, healthPotions]) {
+        for (let i = pickups.length - 1; i >= 0; i--) {
+            const point = freeActorPoint(clampPointToCanvas(pickups[i].x, pickups[i].y), lootSettings.radius);
+            if (canvas.width < 100 || canvas.height - gameHudHeight < 100 || bodyTouchesWall(point.x, point.y, lootSettings.radius)) pickups.splice(i, 1);
+            else Object.assign(pickups[i], point);
+        }
+    }
+}
+
+function drawLootPickups() {
+    ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const box of mysteryBoxes) {
+        const remaining = Math.max(0, lootSettings.mysteryLifetimeMs - (gameClock.elapsedMs - box.spawnedAt));
+        ctx.fillStyle = "rgba(182, 138, 255, .18)";
+        ctx.beginPath(); ctx.arc(box.x, box.y, 31, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = remaining <= 2000 ? "#ff957c" : "#e6bbff"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(box.x, box.y, 31, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining / lootSettings.mysteryLifetimeMs); ctx.stroke();
+        ctx.fillStyle = "#49345e"; ctx.strokeStyle = "#ffe29b"; ctx.lineWidth = 2;
+        ctx.fillRect(box.x - 21, box.y - 23, 42, 46); ctx.strokeRect(box.x - 21, box.y - 23, 42, 46);
+        ctx.fillStyle = "#ffe29b"; ctx.fillRect(box.x - 24, box.y - 25, 48, 7);
+        ctx.font = "bold 23px Arial"; ctx.fillText("?", box.x, box.y - 5);
+        ctx.font = "bold 12px Arial"; ctx.fillStyle = "#fff5dc";
+        ctx.fillText(Math.ceil(remaining / 1000) + "s", box.x, box.y + 14);
+    }
+    for (const potion of healthPotions) {
+        ctx.fillStyle = "rgba(255, 106, 130, .16)";
+        ctx.beginPath(); ctx.arc(potion.x, potion.y, 25 + Math.sin((gameClock.elapsedMs - potion.spawnedAt) / 240) * 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#c74666"; ctx.strokeStyle = "#ffd0d9"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(potion.x, potion.y + 3, 16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#f9a8b8"; ctx.fillRect(potion.x - 7, potion.y - 21, 14, 12);
+        ctx.fillStyle = "#b1915d"; ctx.fillRect(potion.x - 8, potion.y - 24, 16, 6);
+        ctx.fillStyle = "#fff5f7"; ctx.fillRect(potion.x - 9, potion.y, 18, 6); ctx.fillRect(potion.x - 3, potion.y - 6, 6, 18);
+    }
+    ctx.restore();
+}

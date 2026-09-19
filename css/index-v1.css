@@ -37,6 +37,30 @@ body {
     text-align: left;
 }
 
+#mysteryDialog { width: min(810px,calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow-y: auto; padding: 28px; color: #f5f1e4; background: radial-gradient(ellipse at top,#3a2f47,#17241e 75%); border: 1px solid #ad91be; border-radius: 20px; box-shadow: 0 25px 90px #0009; text-align: center; }
+#mysteryDialog::backdrop { background: #07100dc9; }
+.mysteryEyebrow { display: inline-block; color: #e0b6fc; font-size: 11px; font-weight: bold; letter-spacing: .18em; text-transform: uppercase; }
+#mysteryHeading { margin: 10px 0; font-size: clamp(24px,4vw,34px); }
+#mysteryHelp { margin: 0 0 24px; color: #c8cec2; font-size: 14px; line-height: 1.5; }
+.mysteryCards { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+.mysteryCard { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0; min-height: 268px; padding: 20px; color: #f5f1e4; background: linear-gradient(155deg,#383847,#202e26); border: 1px solid #82728e; border-radius: 12px; text-align: left; cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
+.mysteryCard:hover { border-color: #ffe2a1; background: linear-gradient(155deg,#514253,#2d392b); transform: translateY(-3px); }
+.mysteryCard:focus-visible { outline: 3px solid #ffe2a1; outline-offset: 3px; }
+.mysteryIcon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: #e2b6ff15; color: #ffe2a1; font-size: 36px; }
+.mysteryKind { color: #d4b7e4; font-size: 10px; font-weight: bold; letter-spacing: .08em; text-transform: uppercase; }
+.mysteryCard strong { font-size: 20px; line-height: 1.15; }
+.mysteryDescription { color: #d2dacd; font-size: 13px; line-height: 1.5; }
+.mysteryPick { margin-top: auto; padding-top: 12px; color: #ffe2a1; font-size: 12px; font-weight: bold; }
+@media(max-width:600px) {
+    #mysteryDialog { padding: 20px; }
+    .mysteryCards { grid-template-columns: minmax(0,1fr); gap: 10px; }
+    .mysteryCard { display: grid; grid-template-columns: 46px minmax(0,1fr); min-height: 0; padding: 14px; column-gap: 14px; row-gap: 7px; }
+    .mysteryIcon { grid-column: 1; grid-row: 1 / 4; width: 46px; height: 46px; font-size: 30px; }
+    .mysteryKind, .mysteryCard strong, .mysteryDescription, .mysteryPick { grid-column: 2; }
+    .mysteryCard strong { font-size: 18px; }
+    .mysteryPick { padding-top: 2px; }
+}
+
 #soundHome {
     position: fixed;
     right: 12px;

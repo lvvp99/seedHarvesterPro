@@ -5,7 +5,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const root = path.join(__dirname, "..");
-const source = ["js/audio-v1.js", "js/world-v1.js", "js/monsters-v1.js", "js/progression-v1.js", "js/history-v1.js", "js/controls-v1.js", "js/pickups-v1.js", "js/game-v1.js"]
+const source = ["js/audio-v1.js", "js/world-v1.js", "js/monsters-v1.js", "js/progression-v1.js", "js/history-v1.js", "js/controls-v1.js", "js/pickups-v1.js", "js/loot-v1.js", "js/game-v1.js"]
     .map(file => fs.readFileSync(path.join(root, file), "utf8")).join("\n");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 
@@ -18,6 +18,8 @@ function createCombatGame() {
         hayStacks.length = 0;
         monsterState.nextSpawnAt = Infinity;
         nextHaySpawnAt = Infinity;
+        lootState.nextMysteryAt = Infinity;
+        lootState.nextPotionAt = Infinity;
         weaponState.nextShotAt = Infinity;
         weaponState.nextTargetSearchAt = 0;
         function placeMonster(type, x, y) {
@@ -2360,3 +2362,158 @@ test("basic attack balance favors rake damage while inexpensive upgrades still i
     assert.equal(game.run("getRake().damage"),20);
 });
 
+test("mystery boxes count down seven active seconds, pause their expiry, and cannot be collected after expiry", () => {
+    const game=createCombatGame();
+    game.run("mysteryBoxes.push({x:900,y:350,spawnedAt:gameClock.elapsedMs}); drawLootPickups()");
+    assert.ok(game.drawing.some(call=>call.name==="fillText" && call.args[0]==="7s"));
+    game.advance(1000); game.drawing.length=0; game.run("drawLootPickups()");
+    assert.ok(game.drawing.some(call=>call.name==="fillText" && call.args[0]==="6s"));
+    game.key(" "); game.advance(30000);
+    assert.equal(game.run("mysteryBoxes.length"),1);
+    assert.equal(game.run("gameClock.elapsedMs"),1000);
+    game.key(" "); game.advance(5999);
+    assert.equal(game.run("mysteryBoxes.length"),1);
+    game.run("player.x=900;player.y=350"); game.advance(1);
+    assert.equal(game.run("mysteryBoxes.length"),0);
+    assert.equal(game.run("isMysteryChoiceOpen()"),false);
+});
+
+test("walking into a mystery box freezes all gameplay and choosing one card resumes without duplicate rewards", () => {
+    const game=createCombatGame();
+    game.run(`Math.random=()=>0; player.seeds=0;
+        mysteryBoxes.push({x:player.x,y:player.y,spawnedAt:gameClock.elapsedMs});
+        const enemy=placeMonster('brute',player.x,player.y); testBullet(300,400,10);`);
+    game.key("2"); game.key("d"); game.advance(16);
+    assert.equal(game.run("mysteryBoxes.length"),0);
+    assert.equal(game.elements.get("mysteryDialog").open,true);
+    assert.equal(game.run("gameClock.paused"),true);
+    assert.equal(game.run("player.health"),100,"contact cannot damage the player after a box opens");
+    assert.equal(game.run("movement.keys.size"),0);
+    assert.deepEqual(game.read("lootState.choices.map(c=>c.id)"),["seeds","vitality","rakePower"]);
+    const state="({time:gameClock.elapsedMs,scroll:worldState.scroll,x:player.x,y:player.y,health:player.health,bullets,monsters,abilities:abilityState})";
+    const paused=game.read(state);
+    game.key(" ");game.key("c");game.key("1");game.key("d");game.leftClick(1000,350);game.rightClick(1000,350);
+    game.elements.get("keybindingsBtn").emit("click");
+    assert.equal(game.elements.get("keybindingsDialog").open,false);
+    game.advance(60000);
+    assert.deepEqual(game.read(state),paused);
+    assert.equal(game.run("armedAbility"),null);
+    assert.equal(game.run("manuallyPaused"),false);
+    assert.equal(game.run("purchaseUpgrade('damage')"),false);
+    let cancelled=false;
+    game.elements.get("mysteryDialog").emit("cancel",{preventDefault(){cancelled=true;}});
+    assert.equal(cancelled,true);
+    game.document.hidden=true;game.document.emit("visibilitychange");
+    game.elements.get("mysteryCard0").emit("click");
+    assert.equal(game.run("player.seeds"),0);
+    game.document.hidden=false;game.document.emit("visibilitychange");
+    game.elements.get("mysteryCard0").emit("click");game.elements.get("mysteryCard1").emit("click");
+    assert.equal(game.run("player.seeds"),1000);
+    assert.equal(game.run("player.maxHealth"),100);
+    assert.equal(game.run("gameClock.paused"),false);
+    assert.equal(game.elements.get("mysteryDialog").open,false);
+    assert.equal(game.run("gameClock.elapsedMs"),16);
+    game.advance(20);
+    assert.equal(game.run("gameClock.elapsedMs"),36);
+});
+
+test("random cards are distinct, eligible, and still offer three useful bonuses at maximum progression", () => {
+    const game=createCombatGame(), combinations=new Set();
+    for(let i=0;i<25;i++) {
+        game.run("openMysteryChoice()");
+        const choices=game.read("lootState.choices.map(c=>c.id)");
+        assert.equal(new Set(choices).size,3);
+        assert.ok(!choices.includes("heal") && !choices.includes("cooldowns"));
+        combinations.add(choices.join(","));
+        game.run("dismissMysteryChoice();updateGamePauseState()");
+    }
+    assert.ok(combinations.size>5);
+    game.run("player.level=20;for(const name of ['piercingRound','knockback','explosiveKernel','ricochet'])player.unlocks[name]=true;openMysteryChoice()");
+    assert.deepEqual(game.read("lootState.choices.map(c=>c.id).sort()"),["rakePower","seeds","vitality"]);
+    assert.equal(game.run("openMysteryChoice()"),false,"a pending reward cannot be rerolled");
+});
+
+test("mystery bonuses grant health, levels, cooldowns, rake damage, and free weapon effects correctly", () => {
+    for(const id of ["vitality","heal","level","cooldowns","rakePower","piercingRound","knockback","explosiveKernel","ricochet"]) {
+        const game=createCombatGame();
+        game.run(`player.health=30;player.seeds=17;player.xp=10;abilityState.teleport.lastUsedAt=gameClock.elapsedMs;
+            const pool=getMysteryBonuses();const reward=pool.find(b=>b.id===${JSON.stringify(id)});
+            openMysteryChoice();lootState.choices[0]=reward;chooseMysteryBonus(0);`);
+        assert.equal(game.run("player.seeds"),17);
+        if(id==="vitality") {assert.equal(game.run("player.maxHealth"),125);assert.equal(game.run("player.health"),55);}
+        else if(id==="heal") assert.equal(game.run("player.health"),100);
+        else if(id==="level") {assert.equal(game.run("player.level"),2);assert.equal(game.run("player.xp"),10);}
+        else if(id==="cooldowns") assert.equal(game.run("Object.keys(abilityState).every(n=>getCooldownRemainingMs(n)===0)"),true);
+        else if(id==="rakePower") {
+            assert.equal(game.run("getRakeDamage()"),23);
+            assert.equal(game.elements.get("statRakeDamage").textContent,"23");
+            game.leftClick(1000,350);
+            assert.equal(game.run("bullets[0].damage"),23);
+            game.run("awardXp(getXpRequired())");
+            assert.equal(game.run("getRakeDamage()"),33);
+            assert.equal(game.run("bullets[0].damage"),23);
+            assert.equal(game.run("player.damage"),8);
+        } else {
+            assert.equal(game.run(`player.unlocks.${id}`),true);
+            const button=game.upgradeButtons.find(b=>b.dataset.upgrade===id);
+            assert.equal(button.textContent,"Owned");button.emit("click");
+            assert.equal(game.run("player.seeds"),17);
+        }
+    }
+});
+
+test("health potions heal crossed paths once, cap at maximum HP, and are not wasted at full health", () => {
+    const game=createCombatGame();
+    game.run(`player.health=20;const path=[{x1:500,y1:350,x2:850,y2:350}];
+        healthPotions.push({x:700,y:350,spawnedAt:gameClock.elapsedMs}); updateLootPickups(path);updateLootPickups(path);`);
+    assert.equal(game.run("player.health"),55);
+    assert.equal(game.run("healthPotions.length"),0);
+    assert.equal(game.elements.get("healthText").textContent,"55 / 100");
+    assert.ok(game.run("collectionEffects.some(e=>e.label==='+35 HP')"));
+    game.run("player.health=100;healthPotions.push({x:700,y:350,spawnedAt:gameClock.elapsedMs});updateLootPickups(path)");
+    assert.equal(game.run("healthPotions.length"),1);
+    game.run("player.health=94;updateLootPickups(path)");
+    assert.equal(game.run("player.health"),100);
+    assert.equal(game.run("healthPotions.length"),0);
+    assert.ok(game.run("collectionEffects.some(e=>e.label==='+6 HP')"));
+});
+
+test("loot spawns periodically on clear ground with population limits and bounded attempts", () => {
+    const game=createCombatGame();
+    game.run("lootState.nextPotionAt=12000;lootState.nextMysteryAt=20000");
+    game.advance(11999);assert.equal(game.run("healthPotions.length"),0);
+    game.advance(1);assert.equal(game.run("healthPotions.length"),1);
+    game.advance(8000);assert.equal(game.run("mysteryBoxes.length"),1);
+    assert.ok(game.run("[...healthPotions,...mysteryBoxes].every(p=>p.x>getDeathZoneWidth()+60 && !bodyTouchesWall(p.x,p.y,24))"));
+    assert.equal(game.run("spawnMysteryBox()"),false);
+    game.run("spawnHealthPotion();spawnHealthPotion()");assert.equal(game.run("healthPotions.length"),2);
+    assert.ok(game.run("lootState.nextMysteryAt>=55000 && lootState.nextMysteryAt<=75000"));
+    game.run("mysteryBoxes.length=0;healthPotions.length=0;walls.push({x:0,y:0,width:1280,height:720})");
+    assert.equal(game.run("spawnMysteryBox()"),false);assert.equal(game.run("spawnHealthPotion()"),false);
+});
+
+test("new loot follows the scrolling map, stops with Time Freeze, and expires while the world is frozen", () => {
+    const game=createGame({scrolling:true});game.start();
+    game.run(`monsters.length=0;monsterState.nextSpawnAt=Infinity;lootState.nextMysteryAt=Infinity;lootState.nextPotionAt=Infinity;
+        mysteryBoxes.push({x:900,y:350,spawnedAt:gameClock.elapsedMs});healthPotions.push({x:1000,y:500,spawnedAt:gameClock.elapsedMs});`);
+    game.advance(50);
+    assert.equal(game.run("mysteryBoxes[0].x"),897.25);assert.equal(game.run("healthPotions[0].x"),997.25);
+    game.key("4");game.advance(50);
+    assert.equal(game.run("mysteryBoxes[0].x"),897.25);
+    game.run("abilityState.timeFreeze.activeUntil=30000");game.advance(6900);
+    assert.equal(game.run("mysteryBoxes.length"),0);
+    assert.equal(game.run("healthPotions.length"),1);
+    game.advance(13000);assert.equal(game.run("healthPotions.length"),0);
+});
+
+test("resizing and ending a run safely clear blocked loot and pending rewards", () => {
+    const game=createCombatGame();
+    game.run("spawnMysteryBox();spawnHealthPotion();openMysteryChoice()");
+    game.window.innerWidth=80;game.window.innerHeight=180;game.window.emit("resize");
+    assert.equal(game.run("mysteryBoxes.length+healthPotions.length"),0);
+    assert.equal(game.run("gameClock.paused"),true);
+    game.run("endGame()");
+    assert.equal(game.elements.get("mysteryDialog").open,false);
+    assert.equal(game.elements.get("gameOverDialog").open,true);
+    assert.equal(game.run("chooseMysteryBonus(0)"),false);
+});

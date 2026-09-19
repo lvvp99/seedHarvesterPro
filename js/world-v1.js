@@ -121,7 +121,7 @@ function scrollWorld(deltaMs) {
     const shift = getScrollSpeed() * Math.min(deltaMs, 50) / 1000;
     worldState.scroll += shift;
     worldState.nextWallX -= shift;
-    const carried = [player, ...walls, ...hayStacks, ...harvestPickups, ...cooldownPickups, ...harvestBursts, ...dashTrail, ...monsters, ...bullets, ...collectionEffects, ...combatEffects, ...wallSparks];
+    const carried = [player, ...walls, ...hayStacks, ...harvestPickups, ...cooldownPickups, ...mysteryBoxes, ...healthPotions, ...harvestBursts, ...dashTrail, ...monsters, ...bullets, ...collectionEffects, ...combatEffects, ...wallSparks];
     if (abilityState.lure.point) carried.push(abilityState.lure.point);
     if (movement.target && !movement.rightButtonDown) carried.push(movement.target);
     for (const item of carried) item.x -= shift;

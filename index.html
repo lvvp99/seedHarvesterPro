@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SeedHarvesterPro</title><link rel="stylesheet" href="css/index-v1.css?v=19"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SeedHarvesterPro</title><link rel="stylesheet" href="css/index-v1.css?v=20"></head>
 <body>
         <div id="soundHome">
             <button id="keybindingsBtn" type="button">⌨ Keys</button>
@@ -104,5 +104,15 @@
 </footer>
 <dialog id="keybindingsDialog" aria-labelledby="keybindingsHeading"><h2 id="keybindingsHeading">Key bindings</h2><p>Click a key, then press its replacement. Changes are saved in this browser.</p><div id="keybindingList"></div><p id="bindingMessage" role="status" aria-live="polite"></p><p class="mouseControlsNote">Mouse controls: left-click throws / uses a readied ability; right-click or hold moves.</p><div class="bindingActions"><button id="resetKeybindingsBtn" type="button">Reset all</button><button id="cancelBindingBtn" type="button">Cancel key change</button><button id="closeKeybindingsBtn" type="button">Done</button></div></dialog>
 <dialog id="gameOverDialog" aria-labelledby="gameOverTitle"><h2 id="gameOverTitle">Harvest over</h2><p>Survived <strong id="gameOverTime">00:00</strong></p><p>Monsters defeated: <strong id="gameOverKills">0</strong></p><div id="gameOverSoundSlot"></div><button id="restartGameBtn" type="button">Play again</button></dialog>
-<script src="js/audio-v1.js?v=3"></script><script src="js/world-v1.js?v=6"></script><script src="js/monsters-v1.js?v=8"></script><script src="js/progression-v1.js?v=3"></script><script src="js/history-v1.js?v=1"></script><script src="js/controls-v1.js?v=1"></script><script src="js/pickups-v1.js?v=1"></script><script src="js/game-v1.js?v=29"></script>
+<dialog id="mysteryDialog" aria-labelledby="mysteryHeading" aria-describedby="mysteryHelp">
+    <span class="mysteryEyebrow">Mystery box</span>
+    <h2 id="mysteryHeading">Choose your discovery</h2>
+    <p id="mysteryHelp">The game is paused. Pick one bonus to continue.</p>
+    <div class="mysteryCards">
+        <button type="button" id="mysteryCard0" class="mysteryCard"><span id="mysteryIcon0" class="mysteryIcon" aria-hidden="true"></span><span id="mysteryKind0" class="mysteryKind"></span><strong id="mysteryTitle0"></strong><span id="mysteryDescription0" class="mysteryDescription"></span><span class="mysteryPick">Choose bonus →</span></button>
+        <button type="button" id="mysteryCard1" class="mysteryCard"><span id="mysteryIcon1" class="mysteryIcon" aria-hidden="true"></span><span id="mysteryKind1" class="mysteryKind"></span><strong id="mysteryTitle1"></strong><span id="mysteryDescription1" class="mysteryDescription"></span><span class="mysteryPick">Choose bonus →</span></button>
+        <button type="button" id="mysteryCard2" class="mysteryCard"><span id="mysteryIcon2" class="mysteryIcon" aria-hidden="true"></span><span id="mysteryKind2" class="mysteryKind"></span><strong id="mysteryTitle2"></strong><span id="mysteryDescription2" class="mysteryDescription"></span><span class="mysteryPick">Choose bonus →</span></button>
+    </div>
+</dialog>
+<script src="js/audio-v1.js?v=3"></script><script src="js/world-v1.js?v=7"></script><script src="js/monsters-v1.js?v=8"></script><script src="js/progression-v1.js?v=4"></script><script src="js/history-v1.js?v=1"></script><script src="js/controls-v1.js?v=2"></script><script src="js/pickups-v1.js?v=1"></script><script src="js/loot-v1.js?v=1"></script><script src="js/game-v1.js?v=30"></script>
 </body></html>

@@ -115,6 +115,7 @@ const player = {
     level: 1,
     xp: 0,
     totalXp: 0,
+    rakeDamageMultiplier: 1,
 
     damage: 8,
     bulletSpeed: 10,
@@ -380,8 +381,8 @@ function updateGameClock(now = performance.now()) {
 function updateGamePauseState() {
     // Account for the last active interval before entering or leaving a pause.
     updateGameClock();
-    gameClock.paused = !gameStarted || gameOver || manuallyPaused || keyBindings.isOpen() || document.hidden;
-    gameAudio.setScene(gameOver ? "over" : !gameStarted ? "menu" : (manuallyPaused || keyBindings.isOpen()) ? "paused" : "play");
+    gameClock.paused = !gameStarted || gameOver || manuallyPaused || keyBindings.isOpen() || isMysteryChoiceOpen() || document.hidden;
+    gameAudio.setScene(gameOver ? "over" : !gameStarted ? "menu" : (manuallyPaused || keyBindings.isOpen() || isMysteryChoiceOpen()) ? "paused" : "play");
 
     if (gameClock.paused) {
         cancelMovement();
@@ -400,6 +401,7 @@ function endGame() {
     if (gameOver) return;
     updateGameClock();
     gameOver = true;
+    dismissMysteryChoice();
     gameClock.paused = true;
     survivalHistory.save(gameClock.elapsedMs, true);
     cancelMovement();
@@ -662,6 +664,7 @@ function resizeGameCanvas() {
     Object.assign(player, clampPointToCanvas(player.x, player.y));
     resizeWorld();
     resizeMonsters();
+    resizeLootPickups();
 
     if (movement.target) {
         movement.target = getMovementTarget(movement.target.x, movement.target.y);
@@ -795,7 +798,7 @@ function updateStatsPanel() {
         criticalChance: Number((player.criticalChance * 100).toFixed(1)) + "%",
         weaponEffects: effects.join(" · ") || "None",
         rakeName: getRake().name,
-        rakeDamage: getRake().damage.toString()
+        rakeDamage: getRakeDamage().toString()
     };
     for (const [name, value] of Object.entries(values)) {
         if (statFields[name].textContent !== value) statFields[name].textContent = value;
@@ -924,7 +927,7 @@ document.addEventListener("fullscreenchange", () => {
 function updateSeedCount() { seedHudCount.textContent = Math.floor(player.seeds); }
 
 function togglePause() {
-    if (!gameStarted || gameOver) return;
+    if (!gameStarted || gameOver || isMysteryChoiceOpen()) return;
     manuallyPaused = !manuallyPaused;
     document.getElementById("pauseOverlay").hidden = !manuallyPaused;
     keyBindings.refresh();
@@ -946,7 +949,7 @@ window.addEventListener("pagehide", () => {
 window.addEventListener("blur", cancelMovement);
 
 function toggleAutomaticTarget() {
-    if (!gameStarted || gameOver || document.hidden) return;
+    if (!gameStarted || gameOver || isMysteryChoiceOpen() || document.hidden) return;
     weaponState.automaticTarget = !weaponState.automaticTarget;
     weaponState.target = null;
     weaponState.nextTargetSearchAt = 0;
@@ -1005,7 +1008,7 @@ function applyUpgrade(upgrade) {
 
 function canPurchaseUpgrades() {
     // Spending seeds is allowed during a manual pause without resuming combat.
-    return gameStarted && !gameOver && !document.hidden;
+    return gameStarted && !gameOver && !isMysteryChoiceOpen() && !document.hidden;
 }
 
 function isUpgradeMaxed(name) {
@@ -1292,7 +1295,7 @@ function drawDashTrail() {
 // --------------------
 
 window.addEventListener("keydown", function(event) {
-    if (!gameStarted || gameOver || keyBindings.isOpen() || event.ctrlKey || event.altKey || event.metaKey) return;
+    if (!gameStarted || gameOver || keyBindings.isOpen() || isMysteryChoiceOpen() || event.ctrlKey || event.altKey || event.metaKey) return;
     if (event.target?.closest?.("input, textarea, select, [contenteditable], #soundControls")) return;
     const action = keyBindings.actionFor(event);
     if (!action) return;
@@ -1585,6 +1588,7 @@ function draw() {
     drawHayStacks();
     drawHarvestPickups();
     drawCooldownPickups();
+    drawLootPickups();
     drawWalls();
     drawMovementTarget();
     drawLure();
@@ -1698,17 +1702,20 @@ function gameLoop() {
         scrollWorld(frameMs);
         const travel = movePlayer(deltaMs);
         gameAudio.footsteps(travel.distance);
-        updateMonsterSpawning();
-        updateMonsters(deltaMs);
-        updateBullets(deltaMs);
-        updateAutomaticShooting();
-        updateHayStacks(player.x, player.y, travel.segments);
-        updateHarvestPickups(travel.segments);
-        updateCooldownPickups(travel.segments);
-        updateLure();
-        updateCombatEffects();
-        updateMonsterContact();
-        updateDeathZone(frameMs);
+        updateLootPickups(travel.segments);
+        if (canControlPlayer()) {
+            updateMonsterSpawning();
+            updateMonsters(deltaMs);
+            updateBullets(deltaMs);
+            updateAutomaticShooting();
+            updateHayStacks(player.x, player.y, travel.segments);
+            updateHarvestPickups(travel.segments);
+            updateCooldownPickups(travel.segments);
+            updateLure();
+            updateCombatEffects();
+            updateMonsterContact();
+            updateDeathZone(frameMs);
+        }
     }
 
     draw();

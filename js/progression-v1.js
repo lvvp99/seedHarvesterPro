@@ -20,6 +20,7 @@ function getXpRequired(level = player.level) {
 }
 
 function getRake(level = player.level) { return rakeLevels[clamp(level, 1, maxPlayerLevel) - 1]; }
+function getRakeDamage() { return Math.round(getRake().damage * player.rakeDamageMultiplier); }
 
 function awardXp(amount, position = player) {
     if (!Number.isFinite(amount) || amount <= 0) return;
@@ -77,7 +78,7 @@ function throwRake() {
     const speed = 12 + player.level * 0.12;
     bullets.push({ kind: "rake", level: player.level, x: player.x, y: player.y,
         dx: Math.cos(angle) * speed, dy: Math.sin(angle) * speed, angle, size: Math.round(10 + getRake().headWidth * 0.4),
-        damage: getRake().damage, piercing: player.unlocks.piercingRound,
+        damage: getRakeDamage(), piercing: player.unlocks.piercingRound,
         knockback: player.unlocks.knockback, explosive: player.unlocks.explosiveKernel,
         bouncesRemaining: player.unlocks.ricochet ? 2 : 0 });
     rakeState.nextThrowAt = gameClock.elapsedMs + rakeState.cooldownMs;
