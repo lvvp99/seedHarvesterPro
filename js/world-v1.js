@@ -121,7 +121,7 @@ function scrollWorld(deltaMs) {
     const shift = getScrollSpeed() * Math.min(deltaMs, 50) / 1000;
     worldState.scroll += shift;
     worldState.nextWallX -= shift;
-    const carried = [player, ...walls, ...hayStacks, ...harvestPickups, ...cooldownPickups, ...mysteryBoxes, ...healthPotions, ...bossLootDrops, ...harvestBursts, ...dashTrail, ...monsters, ...bullets, ...collectionEffects, ...combatEffects, ...wallSparks];
+    const carried = [player, ...walls, ...hayStacks, ...harvestPickups, ...cooldownPickups, ...mysteryBoxes, ...healthPotions, ...weaponPickups, ...bossLootDrops, ...harvestBursts, ...dashTrail, ...monsters, ...bullets, ...collectionEffects, ...combatEffects, ...wallSparks];
     carried.push(...abilityBursts);
     if (abilityState.dash.lastSafe) carried.push(abilityState.dash.lastSafe);
     for (const trail of teleportTrails) { trail.x1 -= shift; trail.x2 -= shift; }
@@ -324,7 +324,7 @@ function updateDeathZone(deltaMs) {
     worldState.zoneExposure += deltaMs;
     if (worldState.zoneExposure < worldSettings.zoneIntervalMs) return;
     worldState.zoneExposure %= worldSettings.zoneIntervalMs;
-    player.health = Math.max(0, player.health - getMysteryDamageTaken(worldSettings.zoneDamage));
+    player.health = Math.max(0, player.health - worldSettings.zoneDamage);
     worldState.zoneHitUntil = gameClock.elapsedMs + 220;
     gameAudio.play("hurt");
     if (player.health / player.maxHealth <= 0.25) gameAudio.play("lowHealth");

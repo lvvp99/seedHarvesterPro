@@ -20,6 +20,7 @@ function createCombatGame(options = {}) {
         nextHaySpawnAt = Infinity;
         lootState.nextMysteryAt = Infinity;
         lootState.nextPotionAt = Infinity;
+        lootState.nextWeaponAt = Infinity;
         weaponState.nextShotAt = Infinity;
         weaponState.nextTargetSearchAt = 0;
         function placeMonster(type, x, y) {
@@ -255,18 +256,19 @@ test("XP carries past level 20 without changing weapons and queues every fifth l
     assert.equal(game.run("player.seeds"),0);
 });
 
-test("all 20 rake levels have distinct drawings and increasing damage", () => {
+test("all 40 rake levels have distinct drawings and gain ten base damage per tier", () => {
     const game = createCombatGame(), drawings = new Set();
     let damage = 0;
-    for (let level = 1; level <= 20; level++) {
+    for (let level = 1; level <= 40; level++) {
         game.drawing.length = 0;
         game.run(`drawRake(ctx, 0, 0, 0, ${level})`);
         drawings.add(JSON.stringify(game.drawing));
         assert.ok(game.run(`getRake(${level}).damage`) > damage);
         damage = game.run(`getRake(${level}).damage`);
+        assert.equal(damage, 12 + (level - 1) * 10);
     }
-    assert.equal(drawings.size, 20);
-    assert.equal(new Set(game.read("rakeLevels.map(r => r.name)")).size, 20);
+    assert.equal(drawings.size, 40);
+    assert.equal(new Set(game.read("rakeLevels.map(r => r.name)")).size, 40);
 });
 
 test("left-click throws one rake toward the mouse and obeys recovery, pause and input priority", () => {
@@ -470,14 +472,16 @@ test("the start-screen guide describes every named enemy and its arrival time be
     const game = createGame();
     const cards = game.elements.get("enemyList").children;
     const types = game.read("monsterTypes");
-    assert.equal(cards.length, Object.keys(types).length);
+    const bosses = game.read("bossDefinitions");
+    assert.equal(cards.length, Object.keys(types).length - 1 + bosses.length);
     const content = node => [node.textContent, ...node.children.map(content)].join(" ");
     for (const card of cards) {
-        const type = types[card.dataset.enemy];
+        const stage = Number(card.dataset.enemy.split("-")[1]);
+        const type = stage ? bosses[stage - 1] : types[card.dataset.enemy];
         assert.ok(type.name && type.description);
         assert.ok(content(card).includes(type.name));
         assert.ok(content(card).includes(type.description));
-        const arrival = type.availability || ["From the start", "From 00:30", "From 01:00", "From 01:30"][type.minTier];
+        const arrival = stage ? "Level " + stage * 5 : type.availability || ["From the start", "From 00:30", "From 01:00", "From 01:30"][type.minTier];
         assert.ok(content(card).includes(arrival));
         assert.equal(card.children[0].children[0].getAttribute("aria-hidden"), "true");
     }
@@ -879,9 +883,9 @@ test("stats update after purchases and collapse/expand without changing the game
     }
     assert.equal(game.elements.get("statSpeed").textContent, "180/s");
     assert.equal(game.elements.get("statHealth").textContent, "102 / 102");
-    assert.equal(game.elements.get("statDamage").textContent, "8.3");
-    assert.equal(game.elements.get("statBulletSpeed").textContent, "612/s");
-    assert.equal(game.elements.get("statCriticalChance").textContent, "0.45%");
+    assert.equal(game.elements.get("statDamage").textContent, "8.45");
+    assert.equal(game.elements.get("statBulletSpeed").textContent, "615/s");
+    assert.equal(game.elements.get("statCriticalChance").textContent, "0.55%");
     assert.equal(game.elements.get("statWeaponEffects").textContent, "None");
     const button = game.elements.get("statsToggle");
     button.emit("click");
@@ -899,10 +903,10 @@ test("all repeatable stats upgrades increase values and prices without casting a
  assert.deepEqual(game.upgradeButtons.filter(b=>b.dataset.repeatable==="true").map(b=>b.dataset.upgrade),["maxHealth","moveSpeed","damage","bulletSpeed","fireRate","criticalChance","seedValue","cooldown-teleport","cooldown-energyShield","cooldown-dash","cooldown-timeFreeze","cooldown-lure","cooldown-rakeFrenzy"]);
  for(const b of game.upgradeButtons.filter(b=>b.dataset.repeatable==="true")){
    const cost=Number(b.dataset.cost),before=game.run("player.seeds"); b.emit("click");
-   assert.equal(game.run("player.seeds"),before-cost); assert.equal(Number(b.dataset.cost),Math.ceil(cost*1.1));
+   assert.equal(game.run("player.seeds"),before-cost); assert.equal(Number(b.dataset.cost),Math.ceil(cost*1.05));
    assert.equal(game.run("armedAbility"),"teleport");
  }
- assert.equal(game.run("player.maxHealth"),102); assert.equal(game.run("player.damage"),8.3);
+ assert.equal(game.run("player.maxHealth"),102); assert.equal(game.run("player.damage"),8.45);
  assert.equal(game.run("getRake().damage"),12,"basic upgrades do not change rake damage");
 });
 
@@ -950,18 +954,18 @@ test("all stats purchases apply during pause while time, actors and cooldowns re
         assert.deepEqual(game.read(snapshot), paused);
     }
     assert.equal(game.run("player.maxHealth"), 102);
-    assert.equal(game.run("player.damage"), 8.3);
-    assert.equal(game.run("player.bulletSpeed"), 10.2);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.77) < 1e-9);
-    assert.equal(game.run("player.criticalChance"), 0.0045);
+    assert.equal(game.run("player.damage"), 8.45);
+    assert.equal(game.run("player.bulletSpeed"), 10.25);
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.775) < 1e-9);
+    assert.equal(game.run("player.criticalChance"), 0.0055);
     assert.equal(game.run("player.seedMultiplier"),1.015);
     assert.equal(game.run("weaponState.nextShotAt - gameClock.elapsedMs"), 2000 / (game.run("player.fireRate") / 0.75));
     game.elements.get("pauseBtn").emit("click");
-    game.advance(1940);
+    game.advance(1930);
     assert.equal(game.run("bullets.length"), 0);
     game.advance(20);
     assert.equal(game.run("bullets.length"), 1, "resuming uses the upgraded fire rate");
-    assert.equal(game.run("bullets[0].damage"), 8.3);
+    assert.equal(game.run("bullets[0].damage"), 8.45);
 });
 
 test("all five abilities are free and ready on the first HUD click or number-key press", () => {
@@ -1199,18 +1203,18 @@ test("Fire Rate is repeatable, costs seeds, updates stats, and speeds up the pen
     button.emit("click");
     assert.equal(game.run("player.seeds"), 6);
     assert.equal(game.run("upgradeLevels.fireRate"), 1);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.77/s");
+    assert.equal(game.elements.get("statFireRate").textContent, "0.775/s");
     assert.equal(Number(button.dataset.cost), 3);
-    game.advance(1006);
+    game.advance(999);
     assert.equal(game.run("bullets.length"), 1);
-    game.advance(1);
+    game.advance(2);
     assert.equal(game.run("bullets.length"), 2);
 
     button.emit("click");
     assert.equal(game.run("player.seeds"), 3);
     assert.equal(game.run("upgradeLevels.fireRate"), 2);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.79) < 0.000001);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.79/s");
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.8) < 0.000001);
+    assert.equal(game.elements.get("statFireRate").textContent, "0.8/s");
     assert.equal(Number(button.dataset.cost), 4);
     assert.equal(button.disabled, false);
     button.emit("click");
@@ -2331,7 +2335,7 @@ test("basic attack balance favors rake damage while inexpensive upgrades still i
     assert.equal(base,6);
     game.run("player.seeds=4");
     game.elements.get("upgradeDamage").emit("click"); game.elements.get("upgradeFireRate").emit("click");
-    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.391)<1e-8);
+    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.54875)<1e-8);
     assert.equal(game.run("player.seeds"),0);
     assert.equal(game.run("getRake().damage"),12);
 });
@@ -2821,24 +2825,24 @@ test("boss spawning bypasses the regular population cap, stays bounded after kno
     game.run("endGame();queueBossForLevel(10);bossState.active=null;updateBossEncounter()");assert.equal(game.run("bossState.active"),null);
 });
 
-test("weapon loot upgrades independently of XP and continues beyond the original twenty styles", () => {
+test("weapon loot upgrades independently of XP and continues beyond forty styles", () => {
     const game=createCombatGame();game.leftClick(1000,350);
     const first=game.read("bullets[0]");game.run("upgradeRakeWeapon()");
     assert.equal(game.run("player.level"),1);assert.equal(game.run("player.rakeTier"),2);
-    assert.equal(game.run("getRakeDamage()"),14);assert.equal(game.run("getRake().name"),"Copper Tines");
+    assert.equal(game.run("getRakeDamage()"),22);assert.equal(game.run("getRake().name"),"Copper Tines");
     assert.equal(game.run("bullets[0].damage"),first.damage);assert.equal(game.run("bullets[0].level"),1);
-    game.run("player.rakeTier=20;upgradeRakeWeapon()");
-    assert.equal(game.run("player.rakeTier"),21);assert.equal(game.run("getRakeDamage()"),52);
+    game.run("player.rakeTier=40;upgradeRakeWeapon()");
+    assert.equal(game.run("player.rakeTier"),41);assert.equal(game.run("getRakeDamage()"),412);
     assert.match(game.run("getRake().name"),/Ascended/);
     game.run("drawRake(ctx,100,100,0,player.rakeTier);awardXp(100000)");
-    assert.equal(game.run("getRakeDamage()"),52);
+    assert.equal(game.run("getRakeDamage()"),412);
 });
 
 test("expanded mystery rewards provide over thirty unique cards that apply once without changing permanent progression", () => {
     const probe = createCombatGame();
     probe.run("player.health=40;abilityState.teleport.lastUsedAt=gameClock.elapsedMs;hayStacks.push({x:800,y:350,seeds:20});placeMonster('brute',900,350)");
     const ids = probe.read("getMysteryBonuses().map(card=>card.id)");
-    assert.ok(ids.length >= 30);
+    assert.equal(ids.length, 33);
     assert.equal(new Set(ids).size, ids.length);
     for (const id of ids) {
         const storage = abilitySave(123, { teleport: 2, rakeFrenzy: 3 });
@@ -2851,6 +2855,47 @@ test("expanded mystery rewards provide over thirty unique cards that apply once 
         assert.equal(game.run("Number.isFinite(player.health)&&Number.isFinite(player.seeds)&&player.health>0"), true, id);
         assert.equal(storage.get("seedHarvester.abilityProgress.v1"), saved, id);
         assert.deepEqual(game.read("({coins:abilityProgress.coins,teleport:getAbilityLevel('teleport'),frenzy:getAbilityLevel('rakeFrenzy')})"), { coins: 123, teleport: 2, frenzy: 3 }, id);
+    }
+});
+
+test("removed mystery rewards and player armor are absent while five seed jackpots pay their stated amounts", () => {
+    const game = createCombatGame();
+    game.run("player.health=40;abilityState.teleport.lastUsedAt=gameClock.elapsedMs;hayStacks.push({x:800,y:350,seeds:20});placeMonster('brute',900,350)");
+    const ids = game.read("getMysteryBonuses().map(card=>card.id)");
+    for (const removed of ["armor", "heartwood", "levelHealing", "freezeGift", "shieldGift", "frenzyGift", "slowAura", "magnet"]) {
+        assert.ok(!ids.includes(removed), removed);
+    }
+    for (const removed of ["armor", "levelHealing", "slowAura", "pickupReach"]) {
+        assert.equal(game.run(`Object.hasOwn(mysteryBonuses,'${removed}')`), false, removed);
+    }
+    assert.equal(game.run("Object.hasOwn(player,'armor')"), false);
+    for (const [id, amount] of [["seeds500",500],["seeds",1000],["seeds1500",1500],["seeds2000",2000],["seeds3000",3000]]) {
+        game.run(`player.seeds=17;getMysteryBonuses().find(card=>card.id==='${id}').apply()`);
+        assert.equal(game.run("player.seeds"), 17 + amount, id);
+    }
+});
+
+test("Heavy kernels adds ten basic damage per card without modifying rake damage", () => {
+    const game = createCombatGame();
+    game.run("getMysteryBonuses().find(card=>card.id==='basicPower').apply()");
+    assert.equal(game.run("player.damage"), 18);
+    assert.equal(game.run("getRakeDamage()"), 12);
+    game.run("getMysteryBonuses().find(card=>card.id==='basicPower').apply()");
+    assert.equal(game.run("player.damage"), 28);
+    assert.equal(game.run("getRakeDamage()"), 12);
+});
+
+test("batch weapon upgrades add ten base damage per level and preserve damage multipliers and in-flight throws", () => {
+    const game = createCombatGame();
+    game.leftClick(1000,350);
+    game.run("player.rakeDamageMultiplier=1.5;upgradeRakeWeapon(6)");
+    assert.equal(game.run("player.rakeTier"),7);
+    assert.equal(game.run("getRakeDamage()"),108);
+    assert.equal(game.run("bullets[0].damage"),12);
+    assert.equal(game.run("player.level"),1);
+    for (const levels of [0,-1,1.5,Infinity,NaN]) {
+        game.run(`upgradeRakeWeapon(${String(levels)})`);
+        assert.equal(game.run("player.rakeTier"),7);
     }
 });
 
@@ -2870,23 +2915,23 @@ test("regeneration rewards heal during active simulation and stop while paused o
     assert.ok(Math.abs(game.run("player.health") - 50.6) < 1e-9);
 });
 
-test("armor, kill healing and extra XP rewards affect contact and defeated enemies", () => {
+test("enemy contact deals full damage while kill healing and extra XP rewards remain effective", () => {
     const game = createCombatGame();
-    game.run(`for(const id of ['armor','killHealing','xpBonus'])getMysteryBonuses().find(card=>card.id===id).apply();
+    game.run(`for(const id of ['killHealing','xpBonus'])getMysteryBonuses().find(card=>card.id===id).apply();
         const enemy=placeMonster('brute',player.x,player.y);enemy.damage=11;enemy.xpReward=20;
         updateMonsterContact();`);
-    assert.equal(game.run("player.health"), 90);
+    assert.equal(game.run("player.health"), 89);
     game.key(" "); game.run("monsterState.playerInvulnerableUntil=0;updateMonsterContact()");
-    assert.equal(game.run("player.health"), 90);
+    assert.equal(game.run("player.health"), 89);
     game.key(" "); game.run("damageMonster(enemy,enemy.health)");
-    assert.ok(Math.abs(game.run("player.health") - 90.4) < 1e-9);
+    assert.ok(Math.abs(game.run("player.health") - 89.4) < 1e-9);
     assert.equal(game.run("player.xp"), 22);
     assert.equal(game.run("player.level"), 1);
     game.run("damageMonster(enemy,1000)");
     assert.equal(game.run("player.xp"), 22, "an already defeated enemy grants no second reward");
 });
 
-test("pickup magnet reaches hay and potions beyond normal collection range without collecting while paused", () => {
+test("hay and potions require contact and cannot be collected while paused", () => {
     const game = createCombatGame();
     game.run(`player.x=500;player.y=350;player.health=50;player.seeds=0;
         hayStacks.push({x:player.x+player.size/2+haySettings.size*.35+20,y:player.y,seeds:20,spawnedAt:gameClock.elapsedMs});
@@ -2894,7 +2939,7 @@ test("pickup magnet reaches hay and potions beyond normal collection range witho
         const pickupPath=[{x1:player.x,y1:player.y,x2:player.x,y2:player.y}];
         updateHayStacks();updateLootPickups(pickupPath);`);
     assert.equal(game.run("hayStacks.length+healthPotions.length"), 2);
-    game.run("getMysteryBonuses().find(card=>card.id==='magnet').apply()");
+    game.run("player.x+=20;pickupPath[0]={x1:player.x,y1:player.y,x2:player.x,y2:player.y}");
     game.key(" "); game.run("updateHayStacks();updateLootPickups(pickupPath)");
     assert.equal(game.run("hayStacks.length+healthPotions.length"), 2);
     game.key(" "); game.run("updateHayStacks();updateLootPickups(pickupPath)");
@@ -2942,7 +2987,69 @@ test("boss jackpot and weapon drops wait for pickup and can each be claimed only
         const dropPath=[{x1:player.x,y1:player.y,x2:player.x,y2:player.y}];
         updateLootPickups(dropPath);updateLootPickups(dropPath);`);
     assert.equal(game.run("bossLootDrops.length"), 0);
-    assert.deepEqual(game.read("({level:player.level,xp:player.xp,tier:player.rakeTier,seeds:player.seeds})"), { level: 1, xp: 17, tier: 2, seeds: 1000 });
+    assert.deepEqual(game.read("({level:player.level,xp:player.xp,tier:player.rakeTier,seeds:player.seeds})"), { level: 1, xp: 17, tier: 3, seeds: 3000 });
+});
+
+test("normal weapon upgrades spawn occasionally in clear ground with one pickup at a time", () => {
+    const game = createCombatGame();
+    game.run("lootState.nextWeaponAt=45000;gameClock.elapsedMs=44999;updateLootPickups([])");
+    assert.equal(game.run("weaponPickups.length"),0);
+    game.run("gameClock.elapsedMs=45000;updateLootPickups([])");
+    assert.equal(game.run("weaponPickups.length"),1);
+    assert.ok(game.run("lootState.nextWeaponAt>=105000 && lootState.nextWeaponAt<=135000"));
+    assert.ok(game.run("weaponPickups.every(p=>p.x>getDeathZoneWidth()+60&&!bodyTouchesWall(p.x,p.y,24))"));
+    assert.equal(game.run("spawnWeaponUpgrade()"),false);
+    assert.equal(game.run("weaponPickups.length"),1);
+    game.drawing.length=0;game.run("drawLootPickups()");
+    assert.ok(game.drawing.some(call=>call.name==='fillText'&&/WEAPON UPGRADE/.test(call.args[0])));
+    game.run("weaponPickups.length=0;walls.push({x:0,y:0,width:1280,height:720});lootState.nextWeaponAt=gameClock.elapsedMs;updateLootPickups([])");
+    assert.equal(game.run("weaponPickups.length"),0);
+    assert.equal(game.run("lootState.nextWeaponAt-gameClock.elapsedMs"),3000);
+});
+
+test("weapon pickups upgrade only the rake once when crossed and pause prevents collection", () => {
+    const game = createCombatGame();
+    game.run(`player.x=400;player.y=350;player.xp=17;
+        weaponPickups.push({x:650,y:350,spawnedAt:gameClock.elapsedMs});
+        const weaponPath=[{x1:400,y1:350,x2:900,y2:350}];`);
+    game.key(" ");game.run("updateLootPickups(weaponPath)");
+    assert.equal(game.run("weaponPickups.length"),1);
+    assert.equal(game.run("player.rakeTier"),1);
+    game.key(" ");game.run("updateLootPickups(weaponPath);updateLootPickups(weaponPath)");
+    assert.equal(game.run("weaponPickups.length"),0);
+    assert.deepEqual(game.read("({tier:player.rakeTier,damage:getRakeDamage(),level:player.level,xp:player.xp})"),{tier:2,damage:22,level:1,xp:17});
+});
+
+test("normal weapon pickups scroll, stop during pause, expire after fifteen active seconds and resize safely", () => {
+    const game = createCombatGame({scrolling:true});
+    game.run("walls.length=0;weaponPickups.push({x:900,y:350,spawnedAt:gameClock.elapsedMs})");
+    game.advance(50);
+    assert.equal(game.run("weaponPickups[0].x"),897.25);
+    game.key(" ");game.advance(30000);
+    assert.equal(game.run("weaponPickups[0].x"),897.25);
+    assert.equal(game.run("weaponPickups.length"),1);
+    game.key(" ");game.run("gameClock.elapsedMs=14999;updateLootPickups([])");
+    assert.equal(game.run("weaponPickups.length"),1);
+    game.run("gameClock.elapsedMs=15000;updateLootPickups([])");
+    assert.equal(game.run("weaponPickups.length"),0);
+    game.run("weaponPickups.push({x:900,y:350,spawnedAt:gameClock.elapsedMs});canvas.width=40;canvas.height=gameHudHeight+40;resizeLootPickups()");
+    assert.equal(game.run("weaponPickups.length"),0);
+});
+
+test("each later boss awards a larger jackpot, more weapon levels, more boxes and a higher coin range at its death position", () => {
+    for (let stage=1;stage<=6;stage++) for(const [random,extra] of [[0,1],[0.999999,10]]) {
+        const game=createCombatGame();
+        game.run(`player.x=200;player.y=350;Math.random=()=>${random};dropBossLoot(${stage},{x:1000,y:350})`);
+        assert.equal(game.run("bossLootDrops.find(drop=>drop.kind==='seeds').seeds"),750*stage*stage);
+        assert.equal(game.run("bossLootDrops.find(drop=>drop.kind==='weapon').weaponLevels"),stage);
+        assert.equal(game.run("bossLootDrops.find(drop=>drop.kind==='coins').coins"),10*(stage-1)+extra);
+        assert.equal(game.run("mysteryBoxes.length"),3+Math.floor((stage-1)/2));
+        assert.ok(game.run("[...bossLootDrops,...mysteryBoxes].every(drop=>Math.hypot(drop.x-1000,drop.y-350)<250)"));
+        assert.equal(game.run("player.rakeTier"),1);
+        game.run(`mysteryBoxes.length=0;for(const drop of bossLootDrops)Object.assign(drop,{x:player.x,y:player.y});
+            updateLootPickups([{x1:player.x,y1:player.y,x2:player.x,y2:player.y}])`);
+        assert.equal(game.run("player.rakeTier"),stage+1);
+    }
 });
 
 test("expanded mystery rerolls exclude owned rake effects and do not repeat the current three cards", () => {
@@ -2994,7 +3101,7 @@ test("Max quotes exact budgets and one bulk purchase produces one sound and one 
     const game = createCombatGame();
     for (const budget of [0, 1, 2, 4, 5, 8, 9, 13, 14, 20, 100, 10000]) {
         let remaining = budget, cost = 2, count = 0;
-        while (remaining >= cost) { remaining -= cost; count++; cost = Math.ceil(cost * 1.1); }
+        while (remaining >= cost) { remaining -= cost; count++; cost = Math.ceil(cost * 1.05); }
         const quote = game.read(`player.seeds=${budget}; getUpgradePurchase(statsUpgrades.damage,true)`);
         assert.deepEqual(quote, { count, remainingSeeds: remaining, nextCost: cost, spent: budget - remaining });
     }
@@ -3221,6 +3328,106 @@ function createBossAttackGame() {
     return game;
 }
 
+test("six campaign bosses grow in size and health, return together five levels later, and never spawn again after the finale", () => {
+    const game=createCombatGame();
+    game.run("for(let level=5;level<=100;level+=5){queueBossForLevel(level);queueBossForLevel(level)}");
+    assert.deepEqual(game.read("bossState.queue"),[5,10,15,20,25,30]);
+    const names=[], health=[], radii=[], patterns=[];
+    for(let stage=1;stage<=6;stage++) {
+        game.run(`player.level=${stage*5};gameClock.elapsedMs=bossState.nextEncounterAt;updateBossEncounter();bossState.active.xpReward=0`);
+        assert.equal(game.run("bossState.bosses.length"),1);
+        assert.equal(game.run("bossState.active.bossStage"),stage);
+        names.push(game.run("bossState.active.name"));
+        health.push(game.run("bossState.active.maxHealth"));
+        radii.push(game.run("bossState.active.radius"));
+        patterns.push(game.run(`getBossDefinition(${stage}).attacks.join(',')`));
+        game.run("damageMonster(bossState.active,1000000);mysteryBoxes.length=0;bossLootDrops.length=0");
+        assert.equal(game.run("isBossEncounterActive()"),false);
+        assert.equal(game.run("bossState.campaignComplete"),false);
+    }
+    assert.equal(names[0],"Obsidian Colossus");
+    assert.equal(new Set(names).size,6);
+    assert.equal(new Set(patterns).size,6);
+    for(let i=1;i<6;i++) { assert.ok(health[i]>health[i-1]);assert.ok(radii[i]>radii[i-1]); }
+    assert.equal(game.run("bossState.defeatedStages.size"),6);
+    assert.equal(game.run("bossState.finalEncounterLevel"),35);
+    game.run("player.level=34;gameClock.elapsedMs=bossState.nextEncounterAt;updateBossEncounter()");
+    assert.equal(game.run("isBossEncounterActive()"),false);
+    game.run("player.level=35;updateBossEncounter();for(const boss of bossState.bosses)boss.xpReward=0");
+    assert.deepEqual(game.read("bossState.bosses.map(boss=>boss.name)"),names);
+    assert.equal(game.run("bossState.bosses.length"),6);
+    assert.equal(game.run("bossState.finalEncounterStarted"),true);
+    assert.ok(game.run("bossState.bosses.every(boss=>boss.bossFinale&&boss.maxHealth>getBossDefinition(boss.bossStage).health)"));
+    for(let remaining=5;remaining>=0;remaining--) {
+        game.run("damageMonster(bossState.active,1000000)");
+        assert.equal(game.run("bossState.bosses.length"),remaining);
+        assert.equal(game.run("isBossEncounterActive()"),remaining>0);
+        assert.equal(game.run("bossState.campaignComplete"),remaining===0);
+    }
+    assert.equal(game.run("bossLootDrops.length"),18,"each finale boss drops its own rewards");
+    game.run("for(let level=40;level<=250;level+=5)queueBossForLevel(level);gameClock.elapsedMs+=60000;updateBossEncounter()");
+    assert.equal(game.run("bossState.queue.length"),0);
+    assert.equal(game.run("bossState.active"),null);
+    game.run("monsterState.nextSpawnAt=gameClock.elapsedMs;updateMonsterSpawning()");
+    assert.ok(game.run("monsters.some(monster=>monster.type!=='boss')"),"normal survival continues after victory");
+});
+
+test("the finale counts five levels after the sixth victory and keeps every living boss's attack independent", () => {
+    const game=createCombatGame();
+    game.run("queueBossForLevel(35);updateBossEncounter()");
+    assert.equal(game.run("isBossEncounterActive()"),false);
+    assert.deepEqual(game.read("bossState.queue"),[]);
+    game.run(`for(let stage=1;stage<=5;stage++)bossState.defeatedStages.add(stage);
+        player.level=32;player.xp=getXpRequired()-1;queueBossForLevel(30);updateBossEncounter();bossState.active.xpReward=1;
+        damageMonster(bossState.active,1000000);`);
+    assert.equal(game.run("player.level"),33,"the sixth boss XP reward resolves before counting five more levels");
+    assert.equal(game.run("bossState.finalEncounterLevel"),38);
+    game.run("player.level=37;gameClock.elapsedMs=bossState.nextEncounterAt;updateBossEncounter()");
+    assert.equal(game.run("isBossEncounterActive()"),false);
+    game.run(`player.level=38;updateBossEncounter();gameClock.elapsedMs=10000;
+        for(const boss of bossState.bosses){boss.moveAfter=0;boss.nextAttackAt=Infinity;beginBossAttack(undefined,boss)}
+        abilityState.energyShield.activeUntil=Infinity;`);
+    const patterns=game.read("bossState.bosses.map(boss=>boss.attack.type)");
+    assert.equal(new Set(patterns).size,6);
+    game.drawing.length=0;game.run("drawBossAttacks()");
+    for(const type of patterns) assert.ok(game.drawing.some(call=>call.name==='fillText'&&call.args[0]===game.run(`bossAttackLabels['${type}'].split(' · ')[0]`)),type);
+    game.run(`const survivingBosses=bossState.bosses.slice(1);
+        const survivingAttacks=survivingBosses.map(boss=>boss.attack);
+        damageMonster(bossState.active,1000000);`);
+    assert.ok(game.run("survivingBosses.every((boss,index)=>boss.attack===survivingAttacks[index])"));
+    assert.equal(game.run("bossState.active===survivingBosses[0]"),true);
+    const survival=game.run("getSurvivalTime()");
+    game.advance(1100);
+    assert.equal(game.run("getSurvivalTime()"),survival);
+    assert.equal(game.run("isBossEncounterActive()"),true);
+    assert.ok(game.run("survivingBosses.every(boss=>boss.attack?.launched)"));
+});
+
+for(const [stage,type] of [[2,"flameSpiral"],[2,"cinderPools"],[3,"stormCross"],[3,"thunderLines"],
+    [4,"thornMines"],[4,"thornRows"],[4,"seedStorm"],[5,"gravityWell"],[5,"collapsingRing"],
+    [5,"abyssCharge"],[6,"eclipseLattice"],[6,"eclipseOrbs"],[6,"solarStorm"]]) {
+    test(`campaign skill ${type} warns before activating and damages players caught in its hazard`,()=>{
+        const game=createBossAttackGame();
+        game.run(`attackBoss.bossStage=${stage};attackBoss.radius=getBossRadius(${stage});beginBossAttack('${type}');drawBossAttacks();advanceBossAttack(-1)`);
+        assert.equal(game.run("player.health"),100);
+        assert.equal(game.run("bossState.attack.launched"),false);
+        assert.ok(game.drawing.some(call=>call.name==='fillText'&&call.args[0]===game.run(`bossAttackLabels['${type}']`)));
+        game.run(`const skill=bossState.attack;
+            if(skill.kind==='radial'){player.x=attackBoss.x+attackBoss.radius+10+skill.speed*.05;player.y=attackBoss.y;advanceBossAttack(1)}
+            else if(skill.kind==='meteors')advanceBossAttack(skill.markers[0].delay+1);
+            else if(skill.kind==='cross')advanceBossAttack(skill.durationMs/2);
+            else if(skill.kind==='lanes'){const line=skill.lines[0];player.x=(line.x+line.endX)/2;player.y=(line.y+line.endY)/2;advanceBossAttack(1)}
+            else if(skill.kind==='gravityWell'){player.x=attackBoss.x+attackBoss.radius+20;advanceBossAttack(1)}
+            else if(skill.kind==='shockwave'){player.x=skill.x+(skill.startRadius+skill.endRadius)/2;advanceBossAttack(skill.waveDurationMs/2)}
+            else if(skill.kind==='charge'){player.x=550;advanceBossAttack(300)}
+        `);
+        assert.equal(game.run("bossState.attack.launched"),true);
+        assert.ok(game.run("player.health<100 && player.health>0"),type);
+        game.run("abilityState.energyShield.activeUntil=Infinity;advanceBossAttack(bossState.attack.durationMs+1)");
+        assert.equal(game.run("bossState.attack"),null);
+    });
+}
+
 test("boss ignores Lure and Time Freeze while ordinary monsters still obey both", () => {
     const game = createBossAttackGame();
     game.run(`
@@ -3289,7 +3496,7 @@ test("boss attacks retain safe exits around the double ring gap, marked circles,
     }
 });
 
-test("boss attack defenses respect armor, shield, invulnerability, pause and time-freeze immunity", () => {
+test("boss attack defenses respect shield, invulnerability, pause and time-freeze immunity", () => {
     const game = createBossAttackGame();
     game.run(`
         beginBossAttack('beam');
@@ -3307,10 +3514,10 @@ test("boss attack defenses respect armor, shield, invulnerability, pause and tim
     assert.equal(game.run("player.health"), 100);
     game.run("abilityState.energyShield.activeUntil=0; monsterState.playerInvulnerableUntil=30000; advanceBossAttack(530);");
     assert.equal(game.run("player.health"), 100);
-    game.run("monsterState.playerInvulnerableUntil=0; mysteryBonuses.armor=1; advanceBossAttack(540);");
-    assert.equal(game.run("player.health"), 87);
+    game.run("monsterState.playerInvulnerableUntil=0; advanceBossAttack(540);");
+    assert.equal(game.run("player.health"), 74);
     game.run("advanceBossAttack(550);");
-    assert.equal(game.run("player.health"), 87);
+    assert.equal(game.run("player.health"), 74);
 });
 
 test("boss cycles all five attacks, scales their pressure, and removes hazards at death", () => {

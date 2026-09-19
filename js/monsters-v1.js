@@ -6,7 +6,7 @@ const monsterTypes = {
     stalker: { name: "Stalker", description: "The fastest hunter. Use an ability to escape.", radius: 14, health: 36, speed: 110, damage: 10, xp: 5, color: "#5bd6cd", minTier: 1, weight: 14 },
     shellback: { name: "Shellback", description: "Heavily armored. Avoid getting cornered.", radius: 23, health: 120, speed: 34, damage: 20, xp: 10, color: "#729acb", minTier: 2, weight: 10 },
     charger: { name: "Charger", description: "Glows, then rushes. Dodge or get behind a wall.", radius: 20, health: 76, speed: 70, damage: 22, xp: 8, color: "#e56a78", minTier: 3, weight: 12 },
-    boss: { name: "Obsidian Colossus", description: "A fast, relentless armored boss: double shockwaves, three aimed shard volleys, pursuing meteor barrages, a sweeping beam and a lightning-fast charge. Watch its warnings and use your escape abilities. Immune to Lure and Time Freeze. The map, survival timer and death zone stop until it falls. Each boss grows stronger and drops rare loot and coins.", radius: 50, health: 800, speed: 138, damage: 28, xp: 40, color: "#08080c", minTier: Infinity, weight: 0, availability: "Every 5 levels" }
+    boss: { name: "Obsidian Colossus", description: "The first of six bosses. Double shockwaves, aimed shard volleys, meteor barrages, a sweeping beam and a rapid charge. Immune to Lure and Time Freeze. The map, survival timer and death zone stop until the encounter ends.", radius: 50, health: 800, speed: 138, damage: 28, xp: 40, color: "#08080c", minTier: Infinity, weight: 0, availability: "Level 5" }
 };
 
 const monsterSettings = {
@@ -149,7 +149,7 @@ function updateMonsters(deltaMs) {
         const boss = monster.type === "boss";
         if (frozen && !boss) continue;
         if (monster.type === "boss" && gameClock.elapsedMs < monster.moveAfter) continue;
-        if (boss && !bossCanPursueDuringAttack()) continue;
+        if (boss && !bossCanPursueDuringAttack(monster)) continue;
         const destination = boss ? { x: player.x, y: player.y } : getMonsterTarget();
         const targetRadius = lureActive && !boss ? 7 : player.size * 0.35;
         const pulled = !boss && lureActive && abilityState.lure.castLevel >= 2;
@@ -159,7 +159,7 @@ function updateMonsters(deltaMs) {
         const dy = target.y - monster.y;
         const distance = Math.hypot(dx, dy);
         const stopRadius = target === destination ? monster.radius + targetRadius : 0;
-        const speed = getMysteryMonsterSpeed(monster, pulled ? Math.max(420, monster.speed * 4) : monster.speed * speedMultiplier);
+        const speed = pulled ? Math.max(420, monster.speed * 4) : monster.speed * speedMultiplier;
         const step = Math.min(speed * seconds, Math.max(0, distance - stopRadius));
         if (distance > 0) {
             moveActor(monster, dx / distance * step, dy / distance * step, monster.radius);
@@ -179,8 +179,8 @@ function updateMonsters(deltaMs) {
             const nx = distance > 0 ? dx / distance : Math.cos(a.id);
             const ny = distance > 0 ? dy / distance : Math.sin(a.id);
             const push = Math.min((minimum - distance) / 2, 30 * seconds);
-            if ((!frozen || a.type === "boss") && !(a.type === "boss" && !bossCanPursueDuringAttack())) moveActor(a, nx * push, ny * push, a.radius);
-            if ((!frozen || b.type === "boss") && !(b.type === "boss" && !bossCanPursueDuringAttack())) moveActor(b, -nx * push, -ny * push, b.radius);
+            if ((!frozen || a.type === "boss") && !(a.type === "boss" && !bossCanPursueDuringAttack(a))) moveActor(a, nx * push, ny * push, a.radius);
+            if ((!frozen || b.type === "boss") && !(b.type === "boss" && !bossCanPursueDuringAttack(b))) moveActor(b, -nx * push, -ny * push, b.radius);
         }
     }
     for (const monster of monsters) clampMonsterToMap(monster);
@@ -199,6 +199,7 @@ function damageMonster(monster, amount) {
     applyMysteryKillBonuses(monster);
     if (monster.type === "boss") bossDefeated(monster);
     awardXp(monster.xpReward, monster);
+    if (monster.type === "boss") scheduleBossFinaleAfterRewards(monster);
 }
 
 function bulletHitTime(startX, startY, endX, endY, monster, bulletRadius) {
@@ -237,7 +238,7 @@ function resolveBulletHits(bullet, startX, startY) {
 
         // Keep the warned attack anchored in place so its visible path stays truthful.
         if (bullet.kind === "rake" && bullet.knockback && monster.health > 0
-            && !(monster.type === "boss" && !bossCanPursueDuringAttack())) {
+            && !(monster.type === "boss" && !bossCanPursueDuringAttack(monster))) {
             const speed = Math.hypot(bullet.dx, bullet.dy);
             if (speed > 0) {
                 moveActor(monster, bullet.dx / speed * 24, bullet.dy / speed * 24, monster.radius);
@@ -277,7 +278,7 @@ function updateMonsterContact() {
         gameAudio.play("block");
         return;
     }
-    player.health = Math.max(0, player.health - getMysteryDamageTaken(damage));
+    player.health = Math.max(0, player.health - damage);
     if (player.health > 0) {
         gameAudio.play("hurt");
         if (player.health / player.maxHealth <= 0.25) gameAudio.play("lowHealth");
@@ -384,10 +385,13 @@ function drawMonsterBody(ctx, monster, target, elapsedMs = 0) {
 
 function renderEnemyGuide() {
     const list = document.getElementById("enemyList");
-    for (const [type, variant] of Object.entries(monsterTypes)) {
+    const entries = Object.entries(monsterTypes).filter(([type]) => type !== "boss")
+        .concat(bossDefinitions.map((definition, index) => ["boss", { ...definition, radius: 26, bossStage: index + 1,
+            availability: "Level " + ((index + 1) * 5) + " · Returns in the finale" }]));
+    for (const [type, variant] of entries) {
         const card = document.createElement("li");
         card.className = "enemyCard";
-        card.dataset.enemy = type;
+        card.dataset.enemy = type === "boss" ? "boss-" + variant.bossStage : type;
         card.style.borderTopColor = variant.color;
         const heading = document.createElement("div");
         heading.className = "enemyCardHeading";
@@ -396,7 +400,7 @@ function renderEnemyGuide() {
         portrait.height = 80;
         portrait.setAttribute("aria-hidden", "true");
         drawMonsterBody(portrait.getContext("2d"), {
-            type, radius: Math.min(26, variant.radius), x: 40, y: 44, hitUntil: 0, chargePhase: "pursuit"
+            type, bossStage: variant.bossStage, radius: Math.min(26, variant.radius), x: 40, y: 44, hitUntil: 0, chargePhase: "pursuit"
         }, { x: 40, y: 80 });
         const summary = document.createElement("div");
         const name = document.createElement("h3");
@@ -445,11 +449,12 @@ function drawMonsters() {
         ctx.strokeText(label, x + width / 2, y - 4);
         ctx.fillText(label, x + width / 2, y - 4);
         ctx.font = "bold 10px Arial";
-        ctx.fillStyle = monster.type === "boss" ? "#ffaaa5" : variant.color;
-        const nameX = clamp(monster.x, ctx.measureText(variant.name).width / 2 + 3,
-            canvas.width - ctx.measureText(variant.name).width / 2 - 3);
-        ctx.strokeText(variant.name, nameX, y - 16);
-        ctx.fillText(variant.name, nameX, y - 16);
+        ctx.fillStyle = monster.type === "boss" ? getBossDefinition(monster.bossStage).color : variant.color;
+        const name = monster.name || variant.name;
+        const nameX = clamp(monster.x, ctx.measureText(name).width / 2 + 3,
+            canvas.width - ctx.measureText(name).width / 2 - 3);
+        ctx.strokeText(name, nameX, y - 16);
+        ctx.fillText(name, nameX, y - 16);
         ctx.restore();
     }
 }

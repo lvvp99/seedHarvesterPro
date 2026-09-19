@@ -19,17 +19,17 @@
         </div>
 
 <main id="initialView">
-    <h1>Seed harvester pro <span class="gameVersion">v0.3.3</span></h1>
+    <h1>Seed harvester pro <span class="gameVersion">v0.4.0</span></h1>
     <p>Keep moving. Gather seeds. Survive the horde.</p>
     <div class="initialChoices">
         <section class="startCard">
             <img src="imgs/seed-harvester.png" alt="Your seed harvester" width="180" height="200">
-            <h2>The harvester</h2><p>Keep leveling without a limit. Find better rakes in mystery boxes and boss loot.</p>
+            <h2>The harvester</h2><p>Keep leveling without a limit. Discover 40 rake designs through weapon pickups, mystery boxes and boss loot. Every weapon tier adds 10 base damage.</p>
             <button id="startGameBtn" type="button">Start game</button><p id="startMessage" role="status">All six abilities are ready from the start.</p>
             <div class="startAbilities">
                 <div class="startAbilitiesHeading"><h3>Your abilities</h3><span class="coinWallet"><img src="imgs/coin.svg" alt="Coins"><strong id="menuCoins">0</strong></span></div>
                 <div id="abilityUpgradeCards" aria-label="Ability levels and upgrades"></div>
-                <p class="coinHint">Earn +1 coin at 1:00, +2 at 2:00, and so on. Bosses also drop 1–10 coins. Spend coins to keep stronger abilities between runs.</p>
+                <p class="coinHint">Earn +1 coin at 1:00, +2 at 2:00, and so on. Boss rewards grow from 1–10 coins to 51–60 coins. Spend coins to keep stronger abilities between runs.</p>
                 <button type="button" id="menuAbilityInfoBtn">View illustrated level guide</button>
                 <p id="abilityStorageNote"></p>
             </div>
@@ -56,7 +56,7 @@
     </section>
     <section id="enemyGuide" aria-labelledby="enemyGuideHeading">
         <h2 id="enemyGuideHeading">Know your enemies</h2>
-        <p>Every 5 levels, the Obsidian Colossus arrives with five special attacks. Dodge its warning markers: Lure and Time Freeze cannot affect it. Survival time and the map stop, and the red zone disappears until it falls. Each boss drops a seed jackpot, a weapon upgrade, three mystery boxes, and 1–10 coins.</p>
+        <p>Face six different bosses at levels 5, 10, 15, 20, 25 and 30. Gain five more levels after defeating the sixth boss, and all six return together for the final boss encounter. Defeat them all and continue surviving without further bosses. Lure and Time Freeze cannot affect bosses; survival time, scrolling and the red zone remain stopped until the arena is clear. Later bosses drop much larger seed jackpots, more coins, stronger weapon upgrades and more mystery boxes.</p>
         <ul id="enemyList"></ul>
     </section>
 </main>
@@ -81,10 +81,10 @@
 </dl>
 <h3>Basic attack</h3>
 <dl>
-    <div><dt>Damage</dt><dd><span id="statDamage"></span><div class="statPurchaseControls"><button type="button" class="statUpgradeButton" id="upgradeDamage" data-upgrade="damage" data-cost="2" data-repeatable="true" data-label="Basic attack damage" data-benefit="Adds 0.3 basic attack damage.">2</button><button type="button" class="statMaxButton" id="upgradeDamageMax" aria-label="Buy maximum Basic attack damage upgrades" title="Buy as many upgrades as your seeds allow">Max</button></div></dd></div>
-    <div><dt>Shot speed</dt><dd><span id="statBulletSpeed"></span><div class="statPurchaseControls"><button type="button" class="statUpgradeButton" id="upgradeBulletSpeed" data-upgrade="bulletSpeed" data-cost="1" data-repeatable="true" data-label="Basic attack speed" data-benefit="Adds 12 px/s projectile speed.">1</button><button type="button" class="statMaxButton" id="upgradeBulletSpeedMax" aria-label="Buy maximum Basic attack speed upgrades" title="Buy as many upgrades as your seeds allow">Max</button></div></dd></div>
-    <div><dt>Fire rate</dt><dd><span id="statFireRate"></span><div class="statPurchaseControls"><button type="button" class="statUpgradeButton" id="upgradeFireRate" data-upgrade="fireRate" data-cost="2" data-repeatable="true" data-label="Basic attack fire rate" data-benefit="Adds 0.02 shots per second.">2</button><button type="button" class="statMaxButton" id="upgradeFireRateMax" aria-label="Buy maximum Basic attack fire rate upgrades" title="Buy as many upgrades as your seeds allow">Max</button></div></dd></div>
-    <div><dt>Crit chance</dt><dd><span id="statCriticalChance"></span><div class="statPurchaseControls"><button type="button" class="statUpgradeButton" id="upgradeCriticalChance" data-upgrade="criticalChance" data-cost="2" data-repeatable="true" data-label="Basic attack critical chance" data-benefit="Adds 0.45 percentage points. Each full 100% guarantees an extra damage tier; the remainder can add another.">2</button><button type="button" class="statMaxButton" id="upgradeCriticalChanceMax" aria-label="Buy maximum Basic attack critical chance upgrades" title="Buy as many upgrades as your seeds allow">Max</button></div></dd></div>
+    <div><dt>Damage</dt><dd><span id="statDamage"></span><div class="statPurchaseControls"><button type="button" class="statUpgradeButton" id="upgradeDamage" data-upgrade="damage" data-cost="2" data-repeatable="true" data-label="Basic attack damage" data-benefit="Adds 0.45 basic attack damage.">2</button><button type="button" class="statMaxButton" id="upgradeDamageMax" aria-label="Buy maximum Basic attack damage upgrades" title="Buy as many upgrades as your seeds allow">Max</button></div></dd></div>
+    <div><dt>Shot speed</dt><dd><span id="statBulletSpeed"></span><div class="statPurchaseControls"><button type="button" class="statUpgradeButton" id="upgradeBulletSpeed" data-upgrade="bulletSpeed" data-cost="1" data-repeatable="true" data-label="Basic attack speed" data-benefit="Adds 15 px/s projectile speed.">1</button><button type="button" class="statMaxButton" id="upgradeBulletSpeedMax" aria-label="Buy maximum Basic attack speed upgrades" title="Buy as many upgrades as your seeds allow">Max</button></div></dd></div>
+    <div><dt>Fire rate</dt><dd><span id="statFireRate"></span><div class="statPurchaseControls"><button type="button" class="statUpgradeButton" id="upgradeFireRate" data-upgrade="fireRate" data-cost="2" data-repeatable="true" data-label="Basic attack fire rate" data-benefit="Adds 0.025 shots per second.">2</button><button type="button" class="statMaxButton" id="upgradeFireRateMax" aria-label="Buy maximum Basic attack fire rate upgrades" title="Buy as many upgrades as your seeds allow">Max</button></div></dd></div>
+    <div><dt>Crit chance</dt><dd><span id="statCriticalChance"></span><div class="statPurchaseControls"><button type="button" class="statUpgradeButton" id="upgradeCriticalChance" data-upgrade="criticalChance" data-cost="2" data-repeatable="true" data-label="Basic attack critical chance" data-benefit="Adds 0.55 percentage points. Each full 100% guarantees an extra damage tier; the remainder can add another.">2</button><button type="button" class="statMaxButton" id="upgradeCriticalChanceMax" aria-label="Buy maximum Basic attack critical chance upgrades" title="Buy as many upgrades as your seeds allow">Max</button></div></dd></div>
 </dl>
 <h3>Harvest</h3><dl><div><dt>Seed value</dt><dd><span id="statSeedValue"></span><div class="statPurchaseControls"><button type="button" class="statUpgradeButton" id="upgradeSeedValue" data-upgrade="seedValue" data-cost="10" data-repeatable="true" data-label="Seed value" data-benefit="Adds 1.5% of original stack value. Fractional bonus seeds carry over between pickups.">10</button><button type="button" class="statMaxButton" id="upgradeSeedValueMax" aria-label="Buy maximum Seed value upgrades" title="Buy as many upgrades as your seeds allow">Max</button></div></dd></div></dl>
 <section id="rakeEffectsStats" aria-label="Rake weapon and effects"><h3>Rake · <span id="rakeEffectsCount">0/4</span></h3><p id="statRakeName"></p><p class="rakeStatDamage">Damage <strong id="statRakeDamage"></strong></p><p id="statWeaponEffects" hidden></p><dl><div><dt>Piercing Round</dt><dd id="effectState-piercingRound">Locked</dd></div><div><dt>Knockback</dt><dd id="effectState-knockback">Locked</dd></div><div><dt>Explosive Kernel</dt><dd id="effectState-explosiveKernel">Locked</dd></div><div><dt>Ricochet</dt><dd id="effectState-ricochet">Locked</dd></div></dl><p class="statsNote">Effects from mystery boxes.</p></section>
@@ -120,5 +120,5 @@
     </div>
 <div class="mysteryReroll"><span>Seeds: <strong id="mysterySeedBalance">0</strong></span><button type="button" id="rerollMysteryBtn">Reroll · 50 seeds</button><span id="rerollMessage" role="status"></span></div>
 </dialog>
-<script src="js/audio-v1.js?v=3"></script><script src="js/world-v1.js?v=10"></script><script src="js/monsters-v1.js?v=12"></script><script src="js/boss-v1.js?v=3"></script><script src="js/progression-v1.js?v=6"></script><script src="js/history-v1.js?v=1"></script><script src="js/controls-v1.js?v=3"></script><script src="js/pickups-v1.js?v=2"></script><script src="js/rewards-v1.js?v=2"></script><script src="js/loot-v1.js?v=6"></script><script src="js/ability-progress-v1.js?v=3"></script><script src="js/ability-effects-v1.js?v=3"></script><script src="js/game-v1.js?v=35"></script>
+<script src="js/audio-v1.js?v=3"></script><script src="js/world-v1.js?v=11"></script><script src="js/monsters-v1.js?v=13"></script><script src="js/boss-v1.js?v=4"></script><script src="js/progression-v1.js?v=7"></script><script src="js/history-v1.js?v=1"></script><script src="js/controls-v1.js?v=3"></script><script src="js/pickups-v1.js?v=3"></script><script src="js/rewards-v1.js?v=3"></script><script src="js/loot-v1.js?v=7"></script><script src="js/ability-progress-v1.js?v=3"></script><script src="js/ability-effects-v1.js?v=3"></script><script src="js/game-v1.js?v=37"></script>
 </body></html>

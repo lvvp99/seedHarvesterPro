@@ -1,8 +1,9 @@
 const mysteryBoxes = [];
 const healthPotions = [];
+const weaponPickups = [];
 const bossLootDrops = [];
-const lootSettings = { mysteryLifetimeMs: 5000, potionLifetimeMs: 20000, potionHealing: 35, radius: 24 };
-const lootState = { nextMysteryAt: 20000, nextPotionAt: 12000, choosing: false, choices: [], rerolls: 0 };
+const lootSettings = { mysteryLifetimeMs: 5000, potionLifetimeMs: 20000, weaponLifetimeMs: 15000, potionHealing: 35, radius: 24 };
+const lootState = { nextMysteryAt: 20000, nextPotionAt: 12000, nextWeaponAt: 45000, choosing: false, choices: [], rerolls: 0 };
 const mysteryDialog = document.getElementById("mysteryDialog");
 const mysteryCards = [0, 1, 2].map(index => ({
     button: document.getElementById("mysteryCard" + index),
@@ -20,7 +21,7 @@ function findLootPosition() {
         const point = findHayPosition();
         if (!point) return null;
         if (point.x < Math.max(canvas.width * 0.45, getDeathZoneWidth() + 60)) continue;
-        if ([...mysteryBoxes, ...healthPotions, ...bossLootDrops, ...harvestPickups, ...cooldownPickups]
+        if ([...mysteryBoxes, ...healthPotions, ...weaponPickups, ...bossLootDrops, ...harvestPickups, ...cooldownPickups]
             .some(pickup => Math.hypot(pickup.x - point.x, pickup.y - point.y) < 75)) continue;
         return point;
     }
@@ -45,6 +46,15 @@ function spawnHealthPotion() {
     return true;
 }
 
+function spawnWeaponUpgrade() {
+    if (weaponPickups.length) return false;
+    const point = findLootPosition();
+    if (!point) return false;
+    weaponPickups.push({ ...point, spawnedAt: gameClock.elapsedMs });
+    gameAudio.play("ready");
+    return true;
+}
+
 function restoreHealth(amount) {
     const restored = Math.min(amount, Math.max(0, player.maxHealth - player.health));
     if (restored <= 0) return 0;
@@ -63,9 +73,14 @@ function getMysteryBonuses() {
         { id: "rakePower", icon: "✦", kind: "Rake damage", name: "Sharpened tines", description: "Your thrown rake deals 15% more damage, including future weapon upgrades.",
             apply() { player.rakeDamageMultiplier *= 1.15; } }
     ];
+    for (const [amount, name] of [[500, "Seed pouch"], [1500, "Bumper crop"], [2000, "Harvest fortune"], [3000, "Seed bonanza"]]) {
+        bonuses.push({ id: "seeds" + amount, icon: "🌾", kind: "Seed stash", name,
+            description: "Gain " + amount.toLocaleString("en") + " seeds to spend on upgrades.",
+            apply() { player.seeds += amount; } });
+    }
     if (player.health < player.maxHealth) bonuses.push({ id: "heal", icon: "✚", kind: "Recovery", name: "Second wind", description: "Restore all your missing health.",
         apply() { restoreHealth(player.maxHealth); } });
-    bonuses.push({ id: "level", icon: "↑", kind: "Level up", name: "Growing season", description: "Gain exactly one character level. Every fifth level summons a stronger boss.",
+    bonuses.push({ id: "level", icon: "↑", kind: "Level up", name: "Growing season", description: "Gain exactly one character level. Boss milestones arrive at levels 5–30; all six return five levels after you defeat the sixth.",
         apply() { awardXp(getXpRequired() - player.xp, player, false); } });
     if (Object.keys(abilityState).some(name => getCooldownRemainingMs(name) > 0)) bonuses.push({ id: "cooldowns", icon: "↻", kind: "Instant recharge", name: "Fresh start", description: "Reset all six ability cooldowns immediately.",
         apply() { resetAbilityCooldowns(); } });
@@ -105,7 +120,7 @@ function findNearbyLootPosition(anchor, occupied = [], index = 0) {
 }
 
 function spawnMysterySupplies(kind, count) {
-    const occupied = [...mysteryBoxes, ...healthPotions, ...bossLootDrops];
+    const occupied = [...mysteryBoxes, ...healthPotions, ...weaponPickups, ...bossLootDrops];
     let spawned = 0;
     for (let index = 0; index < count; index++) {
         const point = findNearbyLootPosition(player, occupied, index);
@@ -121,8 +136,9 @@ function spawnMysterySupplies(kind, count) {
 function dropBossLoot(stage, point) {
     // Scatter the rewards around the boss's death position, including ranged kills.
     const anchor = { x: point.x, y: point.y };
-    const occupied = [...mysteryBoxes, ...healthPotions, ...bossLootDrops];
-    const rewards = ["mystery", "mystery", "mystery", "seeds", "weapon", "coins"];
+    const occupied = [...mysteryBoxes, ...healthPotions, ...weaponPickups, ...bossLootDrops];
+    const rank = clamp(Math.floor(stage), 1, 6);
+    const rewards = [...Array(3 + Math.floor((rank - 1) / 2)).fill("mystery"), "seeds", "weapon", "coins"];
     for (let index = 0; index < rewards.length; index++) {
         // The boss's cleared arena is a fallback if nearby passages are packed.
         const position = findNearbyLootPosition(anchor, occupied, index) || freeActorPoint(point, lootSettings.radius);
@@ -130,8 +146,8 @@ function dropBossLoot(stage, point) {
             || bodyTouchesWall(position.x, position.y, lootSettings.radius);
         const pickup = { ...position, spawnedAt: gameClock.elapsedMs, bossDrop: true, pending };
         if (rewards[index] === "mystery") mysteryBoxes.push(pickup);
-        else if (rewards[index] === "coins") bossLootDrops.push({ ...pickup, kind: "coins", coins: 1 + Math.floor(Math.random() * 10) });
-        else bossLootDrops.push({ ...pickup, kind: rewards[index], seeds: 500 + stage * 250 });
+        else if (rewards[index] === "coins") bossLootDrops.push({ ...pickup, kind: "coins", coins: 1 + (rank - 1) * 10 + Math.floor(Math.random() * 10) });
+        else bossLootDrops.push({ ...pickup, kind: rewards[index], seeds: 750 * rank * rank, weaponLevels: rank });
         occupied.push(pickup);
     }
     gameAudio.play("ready");
@@ -225,7 +241,7 @@ function updateLootPickups(segments) {
         const point = findNearbyLootPosition(pickup, [...mysteryBoxes, ...bossLootDrops].filter(other => other !== pickup));
         if (point) Object.assign(pickup, point, { pending: false, spawnedAt: gameClock.elapsedMs });
     }
-    for (const [pickups, lifetime] of [[mysteryBoxes, lootSettings.mysteryLifetimeMs], [healthPotions, lootSettings.potionLifetimeMs]]) {
+    for (const [pickups, lifetime] of [[mysteryBoxes, lootSettings.mysteryLifetimeMs], [healthPotions, lootSettings.potionLifetimeMs], [weaponPickups, lootSettings.weaponLifetimeMs]]) {
         for (let i = pickups.length - 1; i >= 0; i--) {
             if (pickups[i].pending) continue;
             if (gameClock.elapsedMs - pickups[i].spawnedAt >= lifetime || pickups[i].x < -32) pickups.splice(i, 1);
@@ -239,6 +255,10 @@ function updateLootPickups(segments) {
         const spawned = spawnHealthPotion();
         lootState.nextPotionAt = gameClock.elapsedMs + (spawned ? 18000 + Math.random() * 12000 : 3000);
     }
+    if (gameClock.elapsedMs >= lootState.nextWeaponAt) {
+        const spawned = spawnWeaponUpgrade();
+        lootState.nextWeaponAt = gameClock.elapsedMs + (spawned ? 60000 + Math.random() * 30000 : 3000);
+    }
     for (let i = bossLootDrops.length - 1; i >= 0; i--) {
         const pickup = bossLootDrops[i];
         if (pickup.pending) continue;
@@ -247,9 +267,9 @@ function updateLootPickups(segments) {
         if (pickup.x < safeEdge) {
             Object.assign(pickup, freeActorPoint({ x: safeEdge, y: pickup.y }, lootSettings.radius));
         }
-        if (!pathTouchesPickup(pickup, segments, getMysteryPickupRadius(player.size / 2 + lootSettings.radius))) continue;
+        if (!pathTouchesPickup(pickup, segments, player.size / 2 + lootSettings.radius)) continue;
         bossLootDrops.splice(i, 1);
-        if (pickup.kind === "weapon") upgradeRakeWeapon();
+        if (pickup.kind === "weapon") upgradeRakeWeapon(pickup.weaponLevels || 1);
         else if (pickup.kind === "coins") {
             const gained = abilityProgress.addCoins(pickup.coins);
             collectionEffects.push({ x: pickup.x, y: pickup.y - 30,
@@ -264,13 +284,18 @@ function updateLootPickups(segments) {
         }
         updateStatsPanel();
     }
+    for (let i = weaponPickups.length - 1; i >= 0; i--) {
+        if (!pathTouchesPickup(weaponPickups[i], segments, player.size / 2 + lootSettings.radius)) continue;
+        weaponPickups.splice(i, 1);
+        upgradeRakeWeapon();
+    }
     for (let i = healthPotions.length - 1; i >= 0; i--) {
-        if (player.health >= player.maxHealth || !pathTouchesPickup(healthPotions[i], segments, getMysteryPickupRadius(player.size / 2 + 19))) continue;
+        if (player.health >= player.maxHealth || !pathTouchesPickup(healthPotions[i], segments, player.size / 2 + 19)) continue;
         healthPotions.splice(i, 1); restoreHealth(lootSettings.potionHealing + mysteryBonuses.potionBonus);
     }
     for (let i = mysteryBoxes.length - 1; i >= 0; i--) {
         if (mysteryBoxes[i].pending) continue;
-        if (!pathTouchesPickup(mysteryBoxes[i], segments, getMysteryPickupRadius(player.size / 2 + lootSettings.radius))) continue;
+        if (!pathTouchesPickup(mysteryBoxes[i], segments, player.size / 2 + lootSettings.radius)) continue;
         mysteryBoxes.splice(i, 1);
         openMysteryChoice();
         break;
@@ -278,7 +303,7 @@ function updateLootPickups(segments) {
 }
 
 function resizeLootPickups() {
-    for (const pickups of [mysteryBoxes, healthPotions, bossLootDrops]) {
+    for (const pickups of [mysteryBoxes, healthPotions, weaponPickups, bossLootDrops]) {
         for (let i = pickups.length - 1; i >= 0; i--) {
             const point = freeActorPoint(clampPointToCanvas(pickups[i].x, pickups[i].y), lootSettings.radius);
             if (canvas.width < 100 || canvas.height - gameHudHeight < 100 || bodyTouchesWall(point.x, point.y, lootSettings.radius)) {
@@ -292,6 +317,19 @@ function resizeLootPickups() {
 
 function drawLootPickups() {
     ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const pickup of weaponPickups) {
+        const remaining = Math.max(0, lootSettings.weaponLifetimeMs - (gameClock.elapsedMs - pickup.spawnedAt));
+        const pulse = 1 + Math.sin(gameClock.elapsedMs / 180) * 0.06;
+        ctx.fillStyle = "rgba(80,213,245,.2)"; ctx.strokeStyle = "#9aeeff"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(pickup.x, pickup.y, 29 * pulse, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(pickup.x, pickup.y, 33, -Math.PI / 2,
+            -Math.PI / 2 + Math.PI * 2 * remaining / lootSettings.weaponLifetimeMs); ctx.stroke();
+        drawRake(ctx, pickup.x, pickup.y, -Math.PI / 4, player.rakeTier + 1, 0.6);
+        ctx.font = "bold 11px Arial"; ctx.fillStyle = "#c7faff"; ctx.strokeStyle = "#102b30"; ctx.lineWidth = 4;
+        ctx.strokeText("WEAPON UPGRADE", pickup.x, pickup.y + 46);
+        ctx.fillText("WEAPON UPGRADE", pickup.x, pickup.y + 46);
+    }
     for (const pickup of bossLootDrops) {
         if (pickup.pending) continue;
         const pulse = Math.sin((gameClock.elapsedMs - pickup.spawnedAt) / 200) * 3;
@@ -308,7 +346,7 @@ function drawLootPickups() {
         } else ctx.fillText(pickup.kind === "weapon" ? "⚒" : "🌾", pickup.x, pickup.y);
         ctx.fillStyle = color;
         ctx.font = "bold 11px Arial"; ctx.strokeStyle = "#152019"; ctx.lineWidth = 4;
-        const label = pickup.kind === "weapon" ? "WEAPON UPGRADE" : pickup.kind === "coins"
+        const label = pickup.kind === "weapon" ? "WEAPON UPGRADE · +" + (pickup.weaponLevels || 1) : pickup.kind === "coins"
             ? "+" + pickup.coins + (pickup.coins === 1 ? " COIN" : " COINS") : "JACKPOT · " + pickup.seeds;
         ctx.strokeText(label, pickup.x, pickup.y + 40); ctx.fillText(label, pickup.x, pickup.y + 40);
     }

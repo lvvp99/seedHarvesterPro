@@ -149,7 +149,7 @@ const player = {
 
 const upgradeLevels = Object.fromEntries(Object.entries(statsUpgrades).filter(([, upgrade]) => upgrade.repeatable).map(([name]) => [name, 0]));
 // Fixed gains avoid exponential stat growth. Only cooldowns reduce proportionally.
-const upgradeGains = { maxHealth: 2, moveSpeed: 0.03, damage: 0.30, bulletSpeed: 0.20, fireRate: 0.020, criticalChance: 0.0045, seedValue: 0.015, cooldown: 0.005 };
+const upgradeGains = { maxHealth: 2, moveSpeed: 0.03, damage: 0.45, bulletSpeed: 0.25, fireRate: 0.025, criticalChance: 0.0055, seedValue: 0.015, cooldown: 0.005 };
 
 
 const abilityState = {
@@ -376,7 +376,7 @@ function updateGameClock(now = performance.now()) {
     if (gameStarted && !gameOver) abilityProgress.awardMinutes(survivalMs);
     const bossActive = isBossEncounterActive();
     document.getElementById("timeLabel").textContent = bossActive ? "Time · Held" : "Time";
-    document.getElementById("timeHud").title = bossActive ? "Survival time stops until the boss is defeated." : "Survival time";
+    document.getElementById("timeHud").title = bossActive ? "Survival time stops until every boss in the arena is defeated." : "Survival time";
 
     const totalSeconds = Math.floor(survivalMs / 1000);
     const seconds = String(totalSeconds % 60).padStart(2, "0");
@@ -531,7 +531,7 @@ function updateHayStacks(previousX = player.x, previousY = player.y, segments = 
                 ((stack.x - segment.x1) * dx + (stack.y - segment.y1) * dy) / distanceSquared, 0, 1
             );
             return Math.hypot(stack.x - (segment.x1 + dx * progress), stack.y - (segment.y1 + dy * progress))
-                <= getMysteryPickupRadius(player.size / 2 + haySettings.size * 0.35);
+                <= player.size / 2 + haySettings.size * 0.35;
         });
 
         if (touched) {
@@ -590,7 +590,7 @@ function updateHarvestPickups(segments) {
     }
     for (let i = harvestPickups.length - 1; i >= 0; i--) {
         const pickup = harvestPickups[i];
-        if (!pathTouchesPickup(pickup, segments, getMysteryPickupRadius(player.size / 2 + 23))) continue;
+        if (!pathTouchesPickup(pickup, segments, player.size / 2 + 23)) continue;
         harvestPickups.splice(i, 1);
         let total = 0;
         for (let j = hayStacks.length - 1; j >= 0; j--) {
@@ -1063,7 +1063,7 @@ function getUpgradePurchase(upgrade, maximum = false) {
         remainingSeeds -= nextCost;
         count++;
         if (!upgrade.repeatable) break;
-        nextCost = Math.ceil(nextCost * 1.1);
+        nextCost = Math.ceil(nextCost * 1.05);
         if (!maximum) break;
     }
     return { count, remainingSeeds, nextCost, spent: player.seeds - remainingSeeds };
@@ -1675,7 +1675,6 @@ function draw() {
 
     drawAbilityPreview();
     drawDashTrail();
-    drawMysteryBonusEffects();
     drawHarvester();
 
     // ENERGY SHIELD VISUAL
