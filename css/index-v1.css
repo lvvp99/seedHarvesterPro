@@ -807,7 +807,7 @@ canvas {
 
 /* Start screen: play and records first, controls next, enemy reference last. */
 #initialView { padding-bottom: 110px; }
-.initialChoices { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; align-items: stretch; }
+.initialChoices { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; align-items: start; }
 #survivalHistory, #controlsGuide { border: 1px solid #465440; border-radius: 16px; background: #263022; padding: 24px; text-align: left; }
 #initialView #historyHeading, #initialView #controlsHeading { font-size: 22px; margin-bottom: 12px; }
 .bestRecord { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 0; color: #f3cc70; border-bottom: 1px solid #465440; }
@@ -914,28 +914,37 @@ canvas {
 }
 
 /* Persistent coins, ability progression and the paused illustrated guide. */
-#abilityWorkshop { width: min(100%,64rem); margin-top: 24px; padding: 24px; border: 1px solid #586448; border-radius: 16px; background: #253023; text-align: left; }
+.startAbilities { margin-top: 22px; padding-top: 18px; border-top: 1px solid #566148; text-align: left; }
+.startAbilitiesHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.startAbilitiesHeading h3 { margin: 0; font-size: 16px; }
+.startAbilities .coinWallet { font-size: 21px; }
+.startAbilities .coinWallet img { width: 25px; height: 25px; }
+.startCard .coinHint { font-size: 11px; line-height: 1.5; margin: 14px 0; }
+.startAbilities #menuAbilityInfoBtn { width: 100%; }
 .workshopHeading { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
 .workshopHeading > div { flex: 1; }
 .workshopEyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: .15em; color: #dfc17b; }
-#initialView #abilityWorkshop h2, #abilityGuideHeading { margin: 5px 0 10px; font-size: 25px; }
-#abilityWorkshop > p, #abilityGuideDialog > p { font-size: 13px; line-height: 1.6; color: #c2cfb9; }
+#abilityGuideHeading { margin: 5px 0 10px; font-size: 25px; }
+#abilityGuideDialog > p { font-size: 13px; line-height: 1.6; color: #c2cfb9; }
 #abilityStorageNote, #guideStorageNote { font-size: 11px !important; color: #bcae81 !important; }
 .coinWallet { display: inline-flex; gap: 8px; align-items: center; color: #ffe19a; font-size: 26px; }
 .coinWallet img { width: 32px; height: 32px; }
-#abilityUpgradeCards { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; margin-top: 20px; }
-.abilityUpgradeCard { min-width: 0; display: flex; flex-direction: column; padding: 16px; border: 1px solid #59704c; border-radius: 12px; background: #1b271f; }
+#abilityUpgradeCards { margin-top: 10px; }
+.abilityUpgradeRow { display: grid; grid-template-columns: 20px minmax(0,1fr) auto auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #46533b; }
+.abilityRowIcon { color: #a6d99e; font-size: 16px; text-align: center; }
+.abilityRowName { color: #f2eed8; font-size: 12px; }
+.abilityUpgradeRow .abilityCoinUpgrade { padding: 6px 8px; font-size: 11px; min-width: 110px; margin: 0; }
+.abilityUpgradeRow[data-level="2"] .abilityRowIcon, .abilityUpgradeRow[data-level="2"] .abilityLevelLabel { color: #d5b4ef; }
+.abilityUpgradeRow[data-level="3"] .abilityRowIcon, .abilityUpgradeRow[data-level="3"] .abilityLevelLabel { color: #f2cc7e; }
 .abilityUpgradeHeading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .abilityUpgradeHeading h3 { margin: 0; font-size: 17px; color: #f2eed8; }
 .abilityLevelLabel { font-size: 11px; color: #a6d99e; white-space: nowrap; }
-.abilityUpgradeCard > img { width: 100%; height: auto; margin-top: 14px; border-radius: 8px; }
-.abilityCurrentBenefit, .abilityNextBenefit { font-size: 12px; line-height: 1.5; color: #c3d0bd; }
-.abilityNextBenefit { color: #e4c58c; padding-top: 8px; border-top: 1px solid #41503d; }
+.abilityCurrentBenefit { font-size: 12px; line-height: 1.5; color: #c3d0bd; }
 .abilityCoinUpgrade, #menuAbilityInfoBtn, #closeAbilityGuideBtn { background: #3b492e; border: 1px solid #b09b59; color: #ffe4a1; border-radius: 6px; padding: 9px 12px; cursor: pointer; font-size: 12px; }
 .abilityCoinUpgrade { margin-top: auto; }
 .abilityCoinUpgrade:disabled { opacity: .5; cursor: default; }
-.abilityUpgradeCard[data-level="2"], .abilityGuideCard[data-level="2"] { border-color: #a584ca; }
-.abilityUpgradeCard[data-level="3"], .abilityGuideCard[data-level="3"] { border-color: #e1b354; }
+.abilityGuideCard[data-level="2"] { border-color: #a584ca; }
+.abilityGuideCard[data-level="3"] { border-color: #e1b354; }
 #currencyHud { grid-area: seeds; display: flex; align-items: center; gap: 12px; }
 #coinHud { display: flex; align-items: center; gap: 5px; color: #ffe09a; font-size: 14px; white-space: nowrap; }
 #coinHud img { width: 21px; height: 21px; }
@@ -966,15 +975,15 @@ canvas {
 .rakeLoadoutContent dl > div { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; gap: 10px; }
 .rakeLoadoutContent dd { margin: 0; color: #aaa49a; font-size: 10px; }
 .rakeLoadoutContent dd.unlocked { color: #a9f4b5; }
-#cooldownCursorNotice { position: fixed; z-index: 30; max-width: 230px; pointer-events: none; padding: 7px 10px; border: 1px solid #ff827f; border-radius: 6px; background: #391d22ed; color: #ffd7d3; font: bold 12px Arial; animation: cooldownBlink .16s 4; }
+#cooldownCursorNotice { position: fixed; z-index: 30; pointer-events: none; color: #ff4242; font: 900 28px/1.1 Arial, sans-serif; text-shadow: 0 2px 3px #180606, 0 0 1px #180606; font-variant-numeric: tabular-nums; white-space: nowrap; animation: cooldownBlink .16s 4; }
 @keyframes cooldownBlink { 50% { opacity: .12; transform: translateY(-3px); } }
 .mysteryReroll { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; margin-top: 22px; color: #d2dacd; font-size: 12px; }
 #rerollMysteryBtn { padding: 9px 14px; border: 1px solid #c8ac6c; border-radius: 7px; background: #493f2a; color: #ffe5ad; cursor: pointer; }
 #rerollMysteryBtn:disabled { opacity: .45; cursor: default; }
 #rerollMessage { flex-basis: 100%; font-size: 11px; }
 @media(max-width:1000px) { #abilityTools { grid-column: 2; grid-row: 1; display: flex; justify-content: flex-end; } }
-@media(max-width:700px) { #abilityUpgradeCards { grid-template-columns: repeat(2,minmax(0,1fr)); } .abilityLevelGuide { grid-template-columns: minmax(0,1fr); } }
-@media(max-width:560px) { #currencyHud { flex-direction: column; gap: 2px; } #currencyHud #seedHud { flex-direction: row; } #coinHud { font-size: 10px; gap: 2px; } #coinHud img { width: 14px; height: 14px; } #abilityUpgradeCards { grid-template-columns: minmax(0,1fr); } #abilityWorkshop, #abilityGuideDialog { padding: 16px; } #abilityInfoBtn { font-size: 10px; } }
+@media(max-width:700px) { .abilityLevelGuide { grid-template-columns: minmax(0,1fr); } }
+@media(max-width:560px) { #currencyHud { flex-direction: column; gap: 2px; } #currencyHud #seedHud { flex-direction: row; } #coinHud { font-size: 10px; gap: 2px; } #coinHud img { width: 14px; height: 14px; } #abilityGuideDialog { padding: 16px; } #abilityInfoBtn { font-size: 10px; } .startCard { padding: 18px; } .abilityUpgradeRow { gap: 5px; grid-template-columns: 16px minmax(0,1fr) auto auto; } .abilityUpgradeRow .abilityCoinUpgrade { min-width: 96px; font-size: 10px; padding: 6px; } }
 @media(prefers-reduced-motion:reduce) { #cooldownCursorNotice { animation: none; } }
 @media(max-width:560px) {
     #bottomHud #abilityBar { grid-template-columns: repeat(3,minmax(0,1fr)); }

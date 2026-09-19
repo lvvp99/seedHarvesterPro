@@ -886,10 +886,10 @@ test("stats update after purchases and collapse/expand without changing the game
         game.upgradeButtons.find(button => button.dataset.upgrade === upgrade).emit("click");
     }
     assert.equal(game.elements.get("statSpeed").textContent, "180/s");
-    assert.equal(game.elements.get("statHealth").textContent, "110 / 110");
-    assert.equal(game.elements.get("statDamage").textContent, "8.6");
-    assert.equal(game.elements.get("statBulletSpeed").textContent, "630/s");
-    assert.equal(game.elements.get("statCriticalChance").textContent, "1%");
+    assert.equal(game.elements.get("statHealth").textContent, "102 / 102");
+    assert.equal(game.elements.get("statDamage").textContent, "8.16");
+    assert.equal(game.elements.get("statBulletSpeed").textContent, "606/s");
+    assert.equal(game.elements.get("statCriticalChance").textContent, "0.25%");
     assert.equal(game.elements.get("statWeaponEffects").textContent, "None");
     const button = game.elements.get("statsToggle");
     button.emit("click");
@@ -910,7 +910,7 @@ test("all repeatable stats upgrades increase values and prices without casting a
    assert.equal(game.run("player.seeds"),before-cost); assert.equal(Number(b.dataset.cost),Math.ceil(cost*1.1));
    assert.equal(game.run("armedAbility"),"teleport");
  }
- assert.equal(game.run("player.maxHealth"),110); assert.equal(game.run("player.damage"),8 * 1.08);
+ assert.equal(game.run("player.maxHealth"),102); assert.equal(game.run("player.damage"),8.16);
  assert.equal(game.run("getRake().damage"),20,"basic upgrades do not change rake damage");
 });
 
@@ -957,19 +957,19 @@ test("all stats purchases apply during pause while time, actors and cooldowns re
         game.advance(2000);
         assert.deepEqual(game.read(snapshot), paused);
     }
-    assert.equal(game.run("player.maxHealth"), 110);
-    assert.equal(game.run("player.damage"), 8 * 1.08);
-    assert.equal(game.run("player.bulletSpeed"), 10.5);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.7875) < 1e-9);
-    assert.equal(game.run("player.criticalChance"), 0.01);
-    assert.equal(game.run("player.seedMultiplier"),1.2);
+    assert.equal(game.run("player.maxHealth"), 102);
+    assert.equal(game.run("player.damage"), 8.16);
+    assert.equal(game.run("player.bulletSpeed"), 10.1);
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.76) < 1e-9);
+    assert.equal(game.run("player.criticalChance"), 0.0025);
+    assert.equal(game.run("player.seedMultiplier"),1.01);
     assert.equal(game.run("weaponState.nextShotAt - gameClock.elapsedMs"), 2000 / (game.run("player.fireRate") / 0.75));
     game.elements.get("pauseBtn").emit("click");
-    game.advance(1904);
+    game.advance(1973);
     assert.equal(game.run("bullets.length"), 0);
     game.advance(20);
     assert.equal(game.run("bullets.length"), 1, "resuming uses the upgraded fire rate");
-    assert.equal(game.run("bullets[0].damage"), 8 * 1.08);
+    assert.equal(game.run("bullets[0].damage"), 8.16);
 });
 
 test("all five abilities are free and ready on the first HUD click or number-key press", () => {
@@ -1207,18 +1207,18 @@ test("Fire Rate is repeatable, costs seeds, updates stats, and speeds up the pen
     button.emit("click");
     assert.equal(game.run("player.seeds"), 6);
     assert.equal(game.run("upgradeLevels.fireRate"), 1);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.79/s");
+    assert.equal(game.elements.get("statFireRate").textContent, "0.76/s");
     assert.equal(Number(button.dataset.cost), 3);
-    game.advance(984);
+    game.advance(1019);
     assert.equal(game.run("bullets.length"), 1);
-    game.advance(0.2);
+    game.advance(1);
     assert.equal(game.run("bullets.length"), 2);
 
     button.emit("click");
     assert.equal(game.run("player.seeds"), 3);
     assert.equal(game.run("upgradeLevels.fireRate"), 2);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.826875) < 0.000001);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.83/s");
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.77) < 0.000001);
+    assert.equal(game.elements.get("statFireRate").textContent, "0.77/s");
     assert.equal(Number(button.dataset.cost), 4);
     assert.equal(button.disabled, false);
     button.emit("click");
@@ -2305,22 +2305,22 @@ test("movement and uncapped cooldown upgrades apply immediately while preserving
     const game=createCombatGame(); game.run("player.seeds=1000000000");
     game.elements.get("upgradeMoveSpeed").emit("click");
     game.key("d"); game.advance(50); game.releaseKey("d");
-    assert.ok(Math.abs(game.run("player.x")-649.9)<1e-8);
+    assert.ok(Math.abs(game.run("player.x")-649.09)<1e-8);
     game.key("2"); game.advance(5000); game.key(" ");
     const old=game.run("getCooldownRemainingMs('energyShield')");
     game.elements.get("upgradeCooldown-energyShield").emit("click");
-    assert.ok(Math.abs(game.run("getCooldownRemainingMs('energyShield')")-old*0.98)<1e-8);
+    assert.ok(Math.abs(game.run("getCooldownRemainingMs('energyShield')")-old*0.995)<1e-8);
     assert.equal(game.run("abilityState.teleport.cooldownMs"),5000);
     for(const name of game.read("Object.keys(abilityState)")) {
         const button=game.elements.get("upgradeCooldown-"+name);
         for(let i=0;i<50;i++)button.emit("click");
         const duration=game.run(`abilityState.${name}.cooldownMs`);
-        assert.ok(duration < game.run(`abilityState.${name}.baseCooldownMs`)*0.5);
+        assert.ok(duration < game.run(`abilityState.${name}.baseCooldownMs`)*0.8);
         assert.equal(button.getAttribute("aria-disabled"),"false");
         assert.notEqual(button.textContent,"Max");
         const seeds=game.run("player.seeds"), cost=Number(button.dataset.cost);button.emit("click");
         assert.equal(game.run("player.seeds"),seeds-cost);
-        assert.ok(Math.abs(game.run(`abilityState.${name}.cooldownMs`)-duration*0.98)<1e-8);
+        assert.ok(Math.abs(game.run(`abilityState.${name}.cooldownMs`)-duration*0.995)<1e-8);
     }
     assert.equal(game.run("gameClock.paused"),true);
 });
@@ -2328,9 +2328,9 @@ test("movement and uncapped cooldown upgrades apply immediately while preserving
 test("cooldown reductions stay fractional below one millisecond and never display a zero cooldown", () => {
     const game=createCombatGame();
     game.run("abilityState.dash.cooldownMs=0.75; player.seeds=100; purchaseUpgrade('cooldown-dash')");
-    assert.equal(game.run("abilityState.dash.cooldownMs"),0.735);
-    assert.equal(game.elements.get("statCooldown-dash").textContent,"0.000735s");
-    assert.equal(game.run("isUpgradeMaxed('cooldown-dash')"),false);
+    assert.equal(game.run("abilityState.dash.cooldownMs"),0.74625);
+    assert.equal(game.elements.get("statCooldown-dash").textContent,"0.000746s");
+    assert.equal(game.run("purchaseUpgrade('cooldown-dash')"),true);
 });
 
 test("basic attack balance favors rake damage while inexpensive upgrades still improve DPS", () => {
@@ -2339,21 +2339,21 @@ test("basic attack balance favors rake damage while inexpensive upgrades still i
     assert.equal(base,6);
     game.run("player.seeds=4");
     game.elements.get("upgradeDamage").emit("click"); game.elements.get("upgradeFireRate").emit("click");
-    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.804)<1e-8);
+    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.2016)<1e-8);
     assert.equal(game.run("player.seeds"),0);
     assert.equal(game.run("getRake().damage"),20);
 });
 
-test("mystery boxes count down seven active seconds, pause their expiry, and cannot be collected after expiry", () => {
+test("mystery boxes count down five active seconds, pause their expiry, and cannot be collected after expiry", () => {
     const game=createCombatGame();
     game.run("mysteryBoxes.push({x:900,y:350,spawnedAt:gameClock.elapsedMs}); drawLootPickups()");
-    assert.ok(game.drawing.some(call=>call.name==="fillText" && call.args[0]==="7s"));
+    assert.ok(game.drawing.some(call=>call.name==="fillText" && call.args[0]==="5s"));
     game.advance(1000); game.drawing.length=0; game.run("drawLootPickups()");
-    assert.ok(game.drawing.some(call=>call.name==="fillText" && call.args[0]==="6s"));
+    assert.ok(game.drawing.some(call=>call.name==="fillText" && call.args[0]==="4s"));
     game.key(" "); game.advance(30000);
     assert.equal(game.run("mysteryBoxes.length"),1);
     assert.equal(game.run("gameClock.elapsedMs"),1000);
-    game.key(" "); game.advance(5999);
+    game.key(" "); game.advance(3999);
     assert.equal(game.run("mysteryBoxes.length"),1);
     game.run("player.x=900;player.y=350"); game.advance(1);
     assert.equal(game.run("mysteryBoxes.length"),0);
@@ -2653,7 +2653,7 @@ test("frenzy throws level-dependent spread volleys then returns to normal single
 test("cooldown attempts flash the remaining time near the cursor without casting", () => {
     const game=createCombatGame();game.run("mouse.x=550;mouse.y=350");game.key("2");game.releaseKey("2");game.key("2");
     const notice=game.elements.get("cooldownCursorNotice");
-    assert.equal(notice.hidden,false);assert.match(notice.textContent,/Energy Shield.*15\.0s.*Not ready/);
+    assert.equal(notice.hidden,false);assert.equal(notice.textContent,"15.0s");
     assert.equal(notice.style.left,"562px");assert.equal(notice.style.top,"312px");
     game.advance(851);assert.equal(notice.hidden,true);
     game.elements.get("abilityEnergyShield").emit("click");assert.equal(notice.hidden,false);
@@ -2662,11 +2662,48 @@ test("cooldown attempts flash the remaining time near the cursor without casting
 
 test("seed value purchases increase both already-spawned and future hay, including mass harvest", () => {
     const game=createCombatGame();game.run("player.seeds=100;hayStacks.push({x:player.x,y:player.y,seeds:10});purchaseUpgrade('seedValue');updateHayStacks()");
-    assert.equal(game.run("player.seeds"),102);
+    assert.equal(game.run("player.seeds"),100);
+    assert.ok(Math.abs(game.run("player.seedRemainder")-0.1)<1e-9);
     game.run("hayStacks.push({x:900,y:350,seeds:20},{x:1000,y:350,seeds:10});harvestPickups.push({x:player.x,y:player.y});updateHarvestPickups([{x1:player.x,y1:player.y,x2:player.x,y2:player.y}])");
-    assert.equal(game.run("player.seeds"),138);
+    assert.equal(game.run("player.seeds"),130);
+    game.run("hayStacks.push({x:player.x,y:player.y,seeds:60});updateHayStacks()");
+    assert.equal(game.run("player.seeds"),191,"small fractions accumulate into one bonus seed after collecting 100 base seeds");
     assert.equal(game.run("hayStacks.length"),0);
     const next=createCombatGame();assert.equal(next.run("player.seedMultiplier"),1);
+});
+
+test("stats remain purchasable beyond the former speed, fire rate and critical limits", () => {
+    const game=createCombatGame();
+    game.run("player.speed=8;player.fireRate=15;player.criticalChance=1;player.seeds=1000;updateStatsPanel()");
+    for(const name of ["moveSpeed","fireRate","criticalChance"]) {
+        const button=game.upgradeButtons.find(b=>b.dataset.upgrade===name);
+        assert.equal(button.getAttribute("aria-disabled"),"false");
+        assert.ok(!button.textContent.includes("Max"));
+        button.emit("click"); button.emit("click");
+        assert.equal(game.run(`upgradeLevels.${name}`),2);
+    }
+    assert.ok(game.run("player.speed>8 && player.fireRate>15 && player.criticalChance>1"));
+});
+
+test("uncapped critical chance produces stronger shots beyond 100 percent", () => {
+    const game=createCombatGame();
+    game.run("weaponState.automaticTarget=false;mouse.x=1000;mouse.y=360;player.damage=10;player.criticalChance=1.5;Math.random=()=>0.49;weaponState.nextShotAt=0;updateAutomaticShooting()");
+    assert.equal(game.run("bullets.at(-1).damage"),30);
+    game.run("Math.random=()=>0.51;weaponState.nextShotAt=0;updateAutomaticShooting()");
+    assert.equal(game.run("bullets.at(-1).damage"),20);
+    game.run("player.criticalChance=2;weaponState.nextShotAt=0;updateAutomaticShooting()");
+    assert.equal(game.run("bullets.at(-1).damage"),30);
+});
+
+test("repeated seed upgrades stay linear and fractional rewards are independent of collection method", () => {
+    const game=createCombatGame();game.run("for(let i=0;i<100;i++)applyUpgrade('seedValue')");
+    assert.ok(Math.abs(game.run("player.seedMultiplier")-2)<1e-9,"100 upgrades double value rather than compounding");
+    const individually=createCombatGame(), together=createCombatGame();
+    for(const current of [individually,together]) current.run("applyUpgrade('seedValue');for(let i=0;i<10;i++)hayStacks.push({x:player.x,y:player.y,seeds:10})");
+    individually.run("updateHayStacks()");
+    together.run("harvestPickups.push({x:player.x,y:player.y});updateHarvestPickups([{x1:player.x,y1:player.y,x2:player.x,y2:player.y}])");
+    assert.equal(individually.run("player.seeds"),101);
+    assert.equal(together.run("player.seeds"),101);
 });
 
 test("mystery rerolls spend seeds, replace choices, grow cost, and keep the game paused", () => {

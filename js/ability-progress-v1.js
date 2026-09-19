@@ -49,12 +49,12 @@ const abilityProgress = (() => {
         document.getElementById("guideStorageNote").textContent = document.getElementById("abilityStorageNote").textContent;
         for (const view of views) {
             const current = level(view.name), price = cost(view.name);
-            view.level.textContent = "Level " + current + "/3";
+            view.level.textContent = (view.compact ? "Lv " : "Level ") + current + "/3";
             view.article.dataset.level = String(current);
-            view.description.textContent = abilityCatalog[view.name].levels[current - 1];
-            if (view.image) view.image.src = "imgs/abilities/" + view.name + "-" + current + ".svg";
-            if (view.next) view.next.textContent = current < 3 ? "Next: " + abilityCatalog[view.name].levels[current] : "All benefits unlocked";
-            view.button.textContent = current === 3 ? "Max level" : "Level " + (current + 1) + " · " + price + " coins";
+            if (view.description) view.description.textContent = abilityCatalog[view.name].levels[current - 1];
+            if (view.icon) view.icon.textContent = abilityCatalog[view.name].icons[current - 1];
+            view.button.textContent = current === 3 ? "Max level" : (view.compact ? "Upgrade · " : "Level " + (current + 1) + " · ") + price + " coins";
+            view.button.title = current < 3 ? "Level " + (current + 1) + ": " + abilityCatalog[view.name].levels[current] : "All benefits unlocked";
             view.button.disabled = current === 3 || state.coins < price || gameOver || isMysteryChoiceOpen() || document.hidden;
             view.button.setAttribute("aria-label", current === 3 ? abilityCatalog[view.name].name + " at maximum level"
                 : "Upgrade " + abilityCatalog[view.name].name + " to level " + (current + 1) + " for " + price + " coins");
@@ -92,17 +92,18 @@ const abilityProgress = (() => {
         for (const context of ["menu", "guide"]) {
             const container = document.getElementById(context === "menu" ? "abilityUpgradeCards" : "abilityGuideCards");
             for (const [name, definition] of Object.entries(abilityCatalog)) {
-                const article = make("article", "", context === "menu" ? "abilityUpgradeCard" : "abilityGuideCard");
-                const header = make("div", "", "abilityUpgradeHeading");
-                const title = make("h3", definition.name), levelLabel = make("span", "", "abilityLevelLabel");
-                header.appendChild(title); header.appendChild(levelLabel); article.appendChild(header);
-                const description = make("p", "", "abilityCurrentBenefit");
-                let image = null, next = null;
-                if (context === "menu") {
-                    image = make("img"); image.alt = definition.name + " current level"; image.width = 240; image.height = 120;
-                    article.appendChild(image); article.appendChild(description);
-                    next = make("p", "", "abilityNextBenefit"); article.appendChild(next);
+                const compact = context === "menu";
+                const article = make(compact ? "div" : "article", "", compact ? "abilityUpgradeRow" : "abilityGuideCard");
+                const levelLabel = make("span", "", "abilityLevelLabel");
+                let description = null, icon = null;
+                if (compact) {
+                    icon = make("span", "", "abilityRowIcon"); icon.setAttribute("aria-hidden", "true");
+                    const label = make("span", definition.name, "abilityRowName");
+                    article.appendChild(icon); article.appendChild(label); article.appendChild(levelLabel);
                 } else {
+                    const header = make("div", "", "abilityUpgradeHeading");
+                    header.appendChild(make("h3", definition.name)); header.appendChild(levelLabel); article.appendChild(header);
+                    description = make("p", "", "abilityCurrentBenefit");
                     article.appendChild(description);
                     const levels = make("div", "", "abilityLevelGuide");
                     for (let n = 1; n <= 3; n++) {
@@ -117,7 +118,7 @@ const abilityProgress = (() => {
                 }
                 const button = make("button", "", "abilityCoinUpgrade"); button.type = "button"; button.id = context + "Upgrade-" + name;
                 button.addEventListener("click", () => purchase(name)); article.appendChild(button); container.appendChild(article);
-                views.push({ name, article, level: levelLabel, description, button, image, next });
+                views.push({ name, article, level: levelLabel, description, button, icon, compact });
             }
         }
         window.addEventListener("storage", event => { if (event.key === storageKey || event.key === null) { state = read() || state; render(); syncAbilityDurations(); updateAbilityHud(); } });

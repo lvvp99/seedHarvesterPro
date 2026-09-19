@@ -1,6 +1,6 @@
 const mysteryBoxes = [];
 const healthPotions = [];
-const lootSettings = { mysteryLifetimeMs: 7000, potionLifetimeMs: 20000, potionHealing: 35, radius: 24 };
+const lootSettings = { mysteryLifetimeMs: 5000, potionLifetimeMs: 20000, potionHealing: 35, radius: 24 };
 const lootState = { nextMysteryAt: 20000, nextPotionAt: 12000, choosing: false, choices: [], rerolls: 0 };
 const mysteryDialog = document.getElementById("mysteryDialog");
 const mysteryCards = [0, 1, 2].map(index => ({

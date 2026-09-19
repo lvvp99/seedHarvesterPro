@@ -67,8 +67,8 @@ function showCooldownFeedback(name) {
     const remaining = getCooldownRemainingMs(name);
     if (remaining <= 0) return;
     const notice = document.getElementById("cooldownCursorNotice");
-    notice.textContent = abilityCatalog[name].name + " · " + (remaining / 1000).toFixed(1) + "s · Not ready";
-    notice.style.left = Math.max(8, Math.min(window.innerWidth - 238, mouse.x + 12)) + "px";
+    notice.textContent = (Math.ceil(remaining / 100) / 10).toFixed(1) + "s";
+    notice.style.left = Math.max(8, Math.min(window.innerWidth - 110, mouse.x + 12)) + "px";
     notice.style.top = Math.max(8, Math.min(window.innerHeight - 42, mouse.y - 38)) + "px";
     notice.style.animation = "none"; void notice.offsetWidth; notice.style.animation = "";
     cooldownFeedback.until = gameClock.elapsedMs + 850;

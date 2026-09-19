@@ -114,6 +114,7 @@ const player = {
 
     seeds: 0,
     seedMultiplier: 1,
+    seedRemainder: 0,
     level: 1,
     xp: 0,
     totalXp: 0,
@@ -145,7 +146,8 @@ const player = {
 
 
 const upgradeLevels = Object.fromEntries(Object.entries(statsUpgrades).filter(([, upgrade]) => upgrade.repeatable).map(([name]) => [name, 0]));
-const upgradeRates = { moveSpeed: 0.10, damage: 0.08, bulletSpeed: 0.05, fireRate: 0.05, criticalChance: 0.01, cooldown: 0.02 };
+// Fixed gains avoid exponential stat growth. Only cooldowns reduce proportionally.
+const upgradeGains = { maxHealth: 2, moveSpeed: 0.03, damage: 0.16, bulletSpeed: 0.1, fireRate: 0.01, criticalChance: 0.0025, seedValue: 0.01, cooldown: 0.005 };
 
 
 const abilityState = {
@@ -462,7 +464,13 @@ function getHaySeedAmount(elapsedMs) {
         + Math.floor(Math.random() * (haySettings.maxSeeds - haySettings.minSeeds + 1));
 }
 
-function getStackSeedAmount(stack) { return Math.max(1, Math.round(stack.seeds * player.seedMultiplier)); }
+function collectStackSeeds(stack) {
+    // Keep fractional bonuses between collections so even small upgrades pay off.
+    const value = stack.seeds * player.seedMultiplier + player.seedRemainder;
+    const amount = Math.floor(value + 1e-9);
+    player.seedRemainder = Math.max(0, value - amount);
+    return amount;
+}
 
 function spawnHayStack(incoming = worldState.started) {
     if (hayStacks.length >= haySettings.maxStacks) {
@@ -513,7 +521,7 @@ function updateHayStacks(previousX = player.x, previousY = player.y, segments = 
         });
 
         if (touched) {
-            const amount = getStackSeedAmount(stack);
+            const amount = collectStackSeeds(stack);
             player.seeds += amount;
             collectionEffects.push({
                 x: stack.x,
@@ -575,7 +583,7 @@ function updateHarvestPickups(segments) {
             const stack = hayStacks[j];
             // Collect the hay on the map, leaving stacks that have not entered it yet.
             if (stack.x < 0 || stack.x > canvas.width || stack.y < gameHudHeight || stack.y > canvas.height) continue;
-            total += getStackSeedAmount(stack);
+            total += collectStackSeeds(stack);
             harvestBursts.push({ x: stack.x, y: stack.y, createdAt: gameClock.elapsedMs });
             hayStacks.splice(j, 1);
         }
@@ -795,11 +803,11 @@ function updateStatsPanel() {
     ].filter(Boolean);
     const values = {
         health: player.health + " / " + player.maxHealth,
-        speed: Math.round(player.speed * 60) + "/s",
-        damage: Number(player.damage.toFixed(1)).toString(),
+        speed: Number((player.speed * 60).toFixed(1)) + "/s",
+        damage: Number(player.damage.toFixed(2)).toString(),
         bulletSpeed: Math.round(player.bulletSpeed * 60) + "/s",
         fireRate: Number(player.fireRate.toFixed(2)) + "/s",
-        criticalChance: Number((player.criticalChance * 100).toFixed(1)) + "%",
+        criticalChance: Number((player.criticalChance * 100).toFixed(2)) + "%",
         weaponEffects: effects.join(" · ") || "None",
         rakeName: getRake().name,
         rakeDamage: getRakeDamage().toString(),
@@ -812,17 +820,15 @@ function updateStatsPanel() {
         document.getElementById("statCooldown-" + name).textContent = Number((state.cooldownMs / 1000).toPrecision(3)) + "s";
     }
     for (const [name, upgrade] of Object.entries(statsUpgrades)) {
-        const maxed = isUpgradeMaxed(name);
         const owned = !upgrade.repeatable && player.unlocks[name];
-        const available = canPurchaseUpgrades() && !maxed && !owned && player.seeds >= upgrade.cost;
-        const price = owned ? "Owned" : maxed ? "Max" : upgrade.cost.toString();
+        const available = canPurchaseUpgrades() && !owned && player.seeds >= upgrade.cost;
+        const price = owned ? "Owned" : upgrade.cost.toString();
         if (upgrade.button.textContent !== price) upgrade.button.textContent = price;
         upgrade.button.setAttribute("aria-disabled", String(!available));
         upgrade.button.classList.toggle("owned", Boolean(owned));
-        upgrade.button.classList.toggle("maxed", maxed);
         upgrade.button.classList.toggle("affordable", available);
-        upgrade.button.setAttribute("aria-label", owned ? upgrade.label + " purchased" : maxed ? upgrade.label + " at maximum" : (upgrade.repeatable ? "Upgrade " : "Unlock ") + upgrade.label + " for " + upgrade.cost + " seeds");
-        upgrade.button.title = owned ? "Applies only to your thrown rake." : maxed ? "Maximum upgrade reached" : upgrade.label + ": " + upgrade.cost + " seeds. " + (upgrade.button.dataset.benefit || "");
+        upgrade.button.setAttribute("aria-label", owned ? upgrade.label + " purchased" : (upgrade.repeatable ? "Upgrade " : "Unlock ") + upgrade.label + " for " + upgrade.cost + " seeds");
+        upgrade.button.title = owned ? "Applies only to your thrown rake." : upgrade.label + ": " + upgrade.cost + " seeds. " + (upgrade.button.dataset.benefit || "");
     }
     updateRakeLoadout();
 }
@@ -966,12 +972,12 @@ function toggleAutomaticTarget() {
 autoTargetToggle.addEventListener("click", toggleAutomaticTarget);
 
 function applyUpgrade(upgrade) {
-    if (upgrade === "seedValue") player.seedMultiplier *= 1.2;
-    if (upgrade === "moveSpeed") player.speed = Math.min(8, player.speed * (1 + upgradeRates.moveSpeed));
+    if (upgrade === "seedValue") player.seedMultiplier += upgradeGains.seedValue;
+    if (upgrade === "moveSpeed") player.speed += upgradeGains.moveSpeed;
     if (upgrade.startsWith("cooldown-")) {
         const state = abilityState[upgrade.slice(9)];
         const fraction = getCooldownRemainingMs(upgrade.slice(9)) / state.cooldownMs;
-        state.cooldownMs *= 1 - upgradeRates.cooldown;
+        state.cooldownMs *= 1 - upgradeGains.cooldown;
         if (fraction > 0) state.lastUsedAt = gameClock.elapsedMs - state.cooldownMs * (1 - fraction);
         updateAbilityHud();
     }
@@ -979,29 +985,29 @@ function applyUpgrade(upgrade) {
 
     if (upgrade === "maxHealth") {
 
-        player.maxHealth += 10;
-        player.health += 10;
+        player.maxHealth += upgradeGains.maxHealth;
+        player.health += upgradeGains.maxHealth;
 
     }
 
     if (upgrade === "damage") {
-        player.damage *= 1 + upgradeRates.damage;
+        player.damage += upgradeGains.damage;
     }
 
     if (upgrade === "bulletSpeed") {
-        player.bulletSpeed *= 1 + upgradeRates.bulletSpeed;
+        player.bulletSpeed += upgradeGains.bulletSpeed;
     }
 
     if (upgrade === "fireRate") {
         const oldRate = player.fireRate;
-        player.fireRate = Math.min(15, player.fireRate * (1 + upgradeRates.fireRate));
+        player.fireRate += upgradeGains.fireRate;
         // Preserve shot progress while applying the faster rate immediately.
         const remaining = Math.max(0, weaponState.nextShotAt - gameClock.elapsedMs);
         weaponState.nextShotAt = gameClock.elapsedMs + remaining / (player.fireRate / oldRate);
     }
 
     if (upgrade === "criticalChance") {
-        player.criticalChance = Math.min(1, player.criticalChance + upgradeRates.criticalChance);
+        player.criticalChance += upgradeGains.criticalChance;
     }
 
 
@@ -1018,13 +1024,9 @@ function canPurchaseUpgrades() {
     return gameStarted && !gameOver && !isMysteryChoiceOpen() && !isAbilityGuideOpen() && !document.hidden;
 }
 
-function isUpgradeMaxed(name) {
-    return name === "criticalChance" && player.criticalChance >= 1 || name === "moveSpeed" && player.speed >= 8 || name === "fireRate" && player.fireRate >= 15;
-}
-
 function purchaseUpgrade(name) {
     const upgrade = statsUpgrades[name];
-    if (!upgrade || isUpgradeMaxed(name) || !canPurchaseUpgrades() || (!upgrade.repeatable && player.unlocks[name])) return false;
+    if (!upgrade || !canPurchaseUpgrades() || (!upgrade.repeatable && player.unlocks[name])) return false;
     if (player.seeds < upgrade.cost) { gameAudio.play("denied"); return false; }
     player.seeds -= upgrade.cost;
     if (upgrade.repeatable) {
@@ -1410,7 +1412,9 @@ function updateAutomaticShooting() {
         weaponState.aimY = dy / distance;
     }
     // If the aim point overlaps the player, keep the last valid direction.
-    const criticalHit = Math.random() < player.criticalChance;
+    // Every full 100% guarantees another damage tier; the remainder can add one more.
+    const criticalTiers = Math.floor(player.criticalChance) + Number(Math.random() < player.criticalChance % 1);
+    const criticalHit = criticalTiers > 0;
     gameAudio.play(criticalHit ? "critical" : "shot");
     bullets.push({
         kind: "basic",
@@ -1419,7 +1423,7 @@ function updateAutomaticShooting() {
         dx: weaponState.aimX * player.bulletSpeed,
         dy: weaponState.aimY * player.bulletSpeed,
         size: 5,
-        damage: criticalHit ? player.damage * 2 : player.damage,
+        damage: player.damage * (1 + criticalTiers),
         critical: criticalHit,
         piercing: false,
         knockback: false,
