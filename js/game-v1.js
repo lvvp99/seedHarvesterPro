@@ -116,6 +116,7 @@ const player = {
     seedMultiplier: 1,
     seedRemainder: 0,
     level: 1,
+    rakeTier: 1,
     xp: 0,
     totalXp: 0,
     rakeDamageMultiplier: 1,
@@ -147,7 +148,7 @@ const player = {
 
 const upgradeLevels = Object.fromEntries(Object.entries(statsUpgrades).filter(([, upgrade]) => upgrade.repeatable).map(([name]) => [name, 0]));
 // Fixed gains avoid exponential stat growth. Only cooldowns reduce proportionally.
-const upgradeGains = { maxHealth: 2, moveSpeed: 0.03, damage: 0.16, bulletSpeed: 0.1, fireRate: 0.01, criticalChance: 0.0025, seedValue: 0.01, cooldown: 0.005 };
+const upgradeGains = { maxHealth: 2, moveSpeed: 0.03, damage: 0.24, bulletSpeed: 0.15, fireRate: 0.015, criticalChance: 0.0035, seedValue: 0.015, cooldown: 0.005 };
 
 
 const abilityState = {
@@ -517,7 +518,7 @@ function updateHayStacks(previousX = player.x, previousY = player.y, segments = 
                 ((stack.x - segment.x1) * dx + (stack.y - segment.y1) * dy) / distanceSquared, 0, 1
             );
             return Math.hypot(stack.x - (segment.x1 + dx * progress), stack.y - (segment.y1 + dy * progress))
-                <= player.size / 2 + haySettings.size * 0.35;
+                <= getMysteryPickupRadius(player.size / 2 + haySettings.size * 0.35);
         });
 
         if (touched) {
@@ -576,7 +577,7 @@ function updateHarvestPickups(segments) {
     }
     for (let i = harvestPickups.length - 1; i >= 0; i--) {
         const pickup = harvestPickups[i];
-        if (!pathTouchesPickup(pickup, segments, player.size / 2 + 23)) continue;
+        if (!pathTouchesPickup(pickup, segments, getMysteryPickupRadius(player.size / 2 + 23))) continue;
         harvestPickups.splice(i, 1);
         let total = 0;
         for (let j = hayStacks.length - 1; j >= 0; j--) {
@@ -747,7 +748,7 @@ function updateHud() {
         healthPercentage + "%";
 
     healthText.textContent =
-        player.health +
+        Number(player.health.toFixed(1)) +
         " / " +
         player.maxHealth;
 
@@ -802,16 +803,16 @@ function updateStatsPanel() {
         player.unlocks.ricochet && "Ricochet ×2"
     ].filter(Boolean);
     const values = {
-        health: player.health + " / " + player.maxHealth,
+        health: Number(player.health.toFixed(1)) + " / " + player.maxHealth,
         speed: Number((player.speed * 60).toFixed(1)) + "/s",
         damage: Number(player.damage.toFixed(2)).toString(),
         bulletSpeed: Math.round(player.bulletSpeed * 60) + "/s",
-        fireRate: Number(player.fireRate.toFixed(2)) + "/s",
+        fireRate: Number(player.fireRate.toFixed(3)) + "/s",
         criticalChance: Number((player.criticalChance * 100).toFixed(2)) + "%",
         weaponEffects: effects.join(" · ") || "None",
         rakeName: getRake().name,
         rakeDamage: getRakeDamage().toString(),
-        seedValue: Number(player.seedMultiplier.toFixed(2)) + "×"
+        seedValue: Number(player.seedMultiplier.toFixed(3)) + "×"
     };
     for (const [name, value] of Object.entries(values)) {
         if (statFields[name].textContent !== value) statFields[name].textContent = value;
@@ -831,6 +832,7 @@ function updateStatsPanel() {
         upgrade.button.title = owned ? "Applies only to your thrown rake." : upgrade.label + ": " + upgrade.cost + " seeds. " + (upgrade.button.dataset.benefit || "");
     }
     updateRakeLoadout();
+    document.getElementById("runBonusesSummary").textContent = getMysteryBonusesSummary().join(" · ") || "Find bonuses in mystery boxes.";
 }
 
 statsToggle.addEventListener("click", function() {
@@ -1628,8 +1630,7 @@ function draw() {
 
     drawAbilityPreview();
     drawDashTrail();
-
-
+    drawMysteryBonusEffects();
     drawHarvester();
 
     // ENERGY SHIELD VISUAL
@@ -1730,11 +1731,13 @@ function gameLoop() {
 
     if (!gameClock.paused) {
         const frameMs = Math.min(deltaMs, 50);
+        updateBossEncounter();
         scrollWorld(frameMs);
         const travel = movePlayer(deltaMs);
         gameAudio.footsteps(travel.distance);
         updateLootPickups(travel.segments);
         if (canControlPlayer()) {
+            updateMysteryBonuses(deltaMs);
             updateMonsterSpawning();
             updateMonsters(deltaMs);
             updateBullets(deltaMs);
@@ -1751,6 +1754,7 @@ function gameLoop() {
     }
 
     draw();
+    drawBossEncounter();
     updateAbilityHud();
     updateStatsPanel();
     updateRakeStatus();

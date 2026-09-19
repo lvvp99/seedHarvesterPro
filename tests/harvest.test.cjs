@@ -5,7 +5,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const root = path.join(__dirname, "..");
-const source = ["js/audio-v1.js", "js/world-v1.js", "js/monsters-v1.js", "js/progression-v1.js", "js/history-v1.js", "js/controls-v1.js", "js/pickups-v1.js", "js/loot-v1.js", "js/ability-progress-v1.js", "js/ability-effects-v1.js", "js/game-v1.js"]
+const source = ["js/audio-v1.js", "js/world-v1.js", "js/monsters-v1.js", "js/boss-v1.js", "js/progression-v1.js", "js/history-v1.js", "js/controls-v1.js", "js/pickups-v1.js", "js/rewards-v1.js", "js/loot-v1.js", "js/ability-progress-v1.js", "js/ability-effects-v1.js", "js/game-v1.js"]
     .map(file => fs.readFileSync(path.join(root, file), "utf8")).join("\n");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 
@@ -241,26 +241,18 @@ test("invalid or blocked history storage cannot stop play or erase in-memory bes
     assert.equal(game.elements.get("bestSurvivalTime").textContent, "—");
 });
 
-test("XP carries across multiple levels, evolves the rake and stops at level 20", () => {
-    const game = createCombatGame();
-    game.run("awardXp(39)");
-    assert.equal(game.run("player.level"), 1);
-    assert.equal(game.elements.get("xpText").textContent, "39 / 40 XP");
-    game.run("awardXp(1)");
-    assert.equal(game.run("player.level"), 2);
-    assert.equal(game.run("player.xp"), 0);
-    assert.equal(game.elements.get("playerLevel").textContent, "2/20");
-    assert.equal(game.elements.get("statRakeDamage").textContent, "29");
-    game.run("awardXp(getXpRequired(2) + getXpRequired(3) + 7)");
-    assert.equal(game.run("player.level"), 4);
-    assert.equal(game.run("player.xp"), 7);
-    game.run("awardXp(1000000); awardXp(12)");
-    assert.equal(game.run("player.level"), 20);
-    assert.equal(game.run("player.xp"), 0);
-    assert.equal(game.elements.get("xpText").textContent, "MAX LEVEL");
-    assert.equal(game.elements.get("xpBar").style.width, "100%");
-    assert.equal(game.elements.get("rakeName").textContent, "Harvest Sovereign");
-    assert.equal(game.run("player.seeds"), 0);
+test("XP carries past level 20 without changing weapons and queues every fifth level", () => {
+    const game=createCombatGame();game.run("awardXp(39)");
+    assert.equal(game.run("player.level"),1);assert.equal(game.elements.get("xpText").textContent,"39 / 40 XP");
+    game.run("awardXp(1)");assert.equal(game.run("player.level"),2);assert.equal(game.run("player.xp"),0);
+    assert.equal(game.elements.get("playerLevel").textContent,"Lv 2");assert.equal(game.elements.get("statRakeDamage").textContent,"12");
+    game.run("awardXp(getXpRequired(2)+getXpRequired(3)+7)");assert.equal(game.run("player.level"),4);assert.equal(game.run("player.xp"),7);
+    game.run("awardXp(Array.from({length:21},(_,i)=>getXpRequired(i+4)).reduce((a,b)=>a+b,0)-player.xp+11)");
+    assert.equal(game.run("player.level"),25);assert.equal(game.run("player.xp"),11);
+    assert.ok(game.run("getXpRequired()>0"));assert.equal(game.elements.get("rakeName").textContent,"Field Rake");
+    assert.equal(game.run("player.rakeTier"),1);assert.deepEqual(game.read("bossState.queue"),[5,10,15,20,25]);
+    game.run("awardXp(getXpRequired())");assert.equal(game.run("player.level"),26);assert.equal(game.run("player.xp"),11);
+    assert.equal(game.run("player.seeds"),0);
 });
 
 test("all 20 rake levels have distinct drawings and increasing damage", () => {
@@ -309,12 +301,12 @@ test("rakes use mouse aim even with automatic targeting and basic upgrades canno
     game.leftClick(1000, 360);
     game.run("updateAutomaticShooting()");
     assert.ok(game.run("bullets[0].dx > 0 && bullets[1].dx < 0"));
-    assert.equal(game.run("bullets[0].damage"), 105);
+    assert.equal(game.run("bullets[0].damage"), 12);
     assert.equal(game.run("bullets[1].damage"), 600);
     assert.ok(game.run("bullets[0].piercing && bullets[0].knockback && bullets[0].explosive"));
     assert.ok(game.run("!bullets[1].piercing && !bullets[1].knockback && !bullets[1].explosive"));
     game.run("awardXp(1000)");
-    assert.equal(game.run("bullets[0].level"), 6, "in-flight rakes keep their original level and damage");
+    assert.equal(game.run("bullets[0].level"), 1, "in-flight rakes keep their original weapon tier and damage");
 });
 
 test("a thrown rake damages crossed enemies and walls stop it before a protected enemy", () => {
@@ -324,7 +316,7 @@ test("a thrown rake damages crossed enemies and walls stop it before a protected
         if (wall) game.run("walls.push({x:700,y:250,width:20,height:200})");
         game.leftClick(1000, 360);
         for (let i=0;i<4;i++) game.run("updateBullets(50)");
-        assert.equal(game.run("victim.health"), wall ? 28 : 8);
+        assert.equal(game.run("victim.health"), wall ? 28 : 16);
         assert.equal(game.run("bullets.length"), 0);
     }
 });
@@ -485,7 +477,7 @@ test("the start-screen guide describes every named enemy and its arrival time be
         assert.ok(type.name && type.description);
         assert.ok(content(card).includes(type.name));
         assert.ok(content(card).includes(type.description));
-        const arrival = ["From the start", "From 00:30", "From 01:00", "From 01:30"][type.minTier];
+        const arrival = type.availability || ["From the start", "From 00:30", "From 01:00", "From 01:30"][type.minTier];
         assert.ok(content(card).includes(arrival));
         assert.equal(card.children[0].children[0].getAttribute("aria-hidden"), "true");
     }
@@ -496,7 +488,7 @@ test("the start-screen guide describes every named enemy and its arrival time be
 
 test("every enemy displays its name above its HP bar, including near map edges", () => {
     const game = createCombatGame();
-    game.run("Object.keys(monsterTypes).forEach((type, index) => placeMonster(type, 20 + index * 249, gameHudHeight + 22));");
+    game.run("Object.keys(monsterTypes).forEach((type, index) => placeMonster(type, 20 + index * 206, gameHudHeight + 22));");
     game.drawing.length = 0;
     game.run("drawMonsters()");
     for (const name of game.read("Object.values(monsterTypes).map(type => type.name)")) {
@@ -887,9 +879,9 @@ test("stats update after purchases and collapse/expand without changing the game
     }
     assert.equal(game.elements.get("statSpeed").textContent, "180/s");
     assert.equal(game.elements.get("statHealth").textContent, "102 / 102");
-    assert.equal(game.elements.get("statDamage").textContent, "8.16");
-    assert.equal(game.elements.get("statBulletSpeed").textContent, "606/s");
-    assert.equal(game.elements.get("statCriticalChance").textContent, "0.25%");
+    assert.equal(game.elements.get("statDamage").textContent, "8.24");
+    assert.equal(game.elements.get("statBulletSpeed").textContent, "609/s");
+    assert.equal(game.elements.get("statCriticalChance").textContent, "0.35%");
     assert.equal(game.elements.get("statWeaponEffects").textContent, "None");
     const button = game.elements.get("statsToggle");
     button.emit("click");
@@ -910,8 +902,8 @@ test("all repeatable stats upgrades increase values and prices without casting a
    assert.equal(game.run("player.seeds"),before-cost); assert.equal(Number(b.dataset.cost),Math.ceil(cost*1.1));
    assert.equal(game.run("armedAbility"),"teleport");
  }
- assert.equal(game.run("player.maxHealth"),102); assert.equal(game.run("player.damage"),8.16);
- assert.equal(game.run("getRake().damage"),20,"basic upgrades do not change rake damage");
+ assert.equal(game.run("player.maxHealth"),102); assert.equal(game.run("player.damage"),8.24);
+ assert.equal(game.run("getRake().damage"),12,"basic upgrades do not change rake damage");
 });
 
 test("stats purchases work while paused but cannot overspend or run in a hidden or ended game", () => {
@@ -958,18 +950,18 @@ test("all stats purchases apply during pause while time, actors and cooldowns re
         assert.deepEqual(game.read(snapshot), paused);
     }
     assert.equal(game.run("player.maxHealth"), 102);
-    assert.equal(game.run("player.damage"), 8.16);
-    assert.equal(game.run("player.bulletSpeed"), 10.1);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.76) < 1e-9);
-    assert.equal(game.run("player.criticalChance"), 0.0025);
-    assert.equal(game.run("player.seedMultiplier"),1.01);
+    assert.equal(game.run("player.damage"), 8.24);
+    assert.equal(game.run("player.bulletSpeed"), 10.15);
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.765) < 1e-9);
+    assert.equal(game.run("player.criticalChance"), 0.0035);
+    assert.equal(game.run("player.seedMultiplier"),1.015);
     assert.equal(game.run("weaponState.nextShotAt - gameClock.elapsedMs"), 2000 / (game.run("player.fireRate") / 0.75));
     game.elements.get("pauseBtn").emit("click");
-    game.advance(1973);
+    game.advance(1960);
     assert.equal(game.run("bullets.length"), 0);
     game.advance(20);
     assert.equal(game.run("bullets.length"), 1, "resuming uses the upgraded fire rate");
-    assert.equal(game.run("bullets[0].damage"), 8.16);
+    assert.equal(game.run("bullets[0].damage"), 8.24);
 });
 
 test("all five abilities are free and ready on the first HUD click or number-key press", () => {
@@ -1207,9 +1199,9 @@ test("Fire Rate is repeatable, costs seeds, updates stats, and speeds up the pen
     button.emit("click");
     assert.equal(game.run("player.seeds"), 6);
     assert.equal(game.run("upgradeLevels.fireRate"), 1);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.76/s");
+    assert.equal(game.elements.get("statFireRate").textContent, "0.765/s");
     assert.equal(Number(button.dataset.cost), 3);
-    game.advance(1019);
+    game.advance(1013);
     assert.equal(game.run("bullets.length"), 1);
     game.advance(1);
     assert.equal(game.run("bullets.length"), 2);
@@ -1217,8 +1209,8 @@ test("Fire Rate is repeatable, costs seeds, updates stats, and speeds up the pen
     button.emit("click");
     assert.equal(game.run("player.seeds"), 3);
     assert.equal(game.run("upgradeLevels.fireRate"), 2);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.77) < 0.000001);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.77/s");
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.78) < 0.000001);
+    assert.equal(game.elements.get("statFireRate").textContent, "0.78/s");
     assert.equal(Number(button.dataset.cost), 4);
     assert.equal(button.disabled, false);
     button.emit("click");
@@ -2339,9 +2331,9 @@ test("basic attack balance favors rake damage while inexpensive upgrades still i
     assert.equal(base,6);
     game.run("player.seeds=4");
     game.elements.get("upgradeDamage").emit("click"); game.elements.get("upgradeFireRate").emit("click");
-    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.2016)<1e-8);
+    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.3036)<1e-8);
     assert.equal(game.run("player.seeds"),0);
-    assert.equal(game.run("getRake().damage"),20);
+    assert.equal(game.run("getRake().damage"),12);
 });
 
 test("mystery boxes count down five active seconds, pause their expiry, and cannot be collected after expiry", () => {
@@ -2411,7 +2403,9 @@ test("random cards are distinct, eligible, and still offer three useful bonuses 
     }
     assert.ok(combinations.size>5);
     game.run("player.level=20;for(const name of ['piercingRound','knockback','explosiveKernel','ricochet'])player.unlocks[name]=true;openMysteryChoice()");
-    assert.deepEqual(game.read("lootState.choices.map(c=>c.id).sort()"),["rakePower","seeds","vitality"]);
+    assert.equal(game.run("new Set(lootState.choices.map(c=>c.id)).size"),3);
+    assert.ok(game.run("getMysteryBonuses().length>=25"));
+    assert.ok(game.run("!lootState.choices.some(c=>['piercingRound','knockback','explosiveKernel','ricochet'].includes(c.id))"));
     assert.equal(game.run("openMysteryChoice()"),false,"a pending reward cannot be rerolled");
 });
 
@@ -2424,16 +2418,16 @@ test("mystery bonuses grant health, levels, cooldowns, rake damage, and free wea
         assert.equal(game.run("player.seeds"),17);
         if(id==="vitality") {assert.equal(game.run("player.maxHealth"),125);assert.equal(game.run("player.health"),55);}
         else if(id==="heal") assert.equal(game.run("player.health"),100);
-        else if(id==="level") {assert.equal(game.run("player.level"),2);assert.equal(game.run("player.xp"),10);}
+        else if(id==="level") {assert.equal(game.run("player.level"),2);assert.equal(game.run("player.xp"),0);assert.equal(game.run("player.rakeTier"),1);}
         else if(id==="cooldowns") assert.equal(game.run("Object.keys(abilityState).every(n=>getCooldownRemainingMs(n)===0)"),true);
         else if(id==="rakePower") {
-            assert.equal(game.run("getRakeDamage()"),23);
-            assert.equal(game.elements.get("statRakeDamage").textContent,"23");
+            assert.equal(game.run("getRakeDamage()"),14);
+            assert.equal(game.elements.get("statRakeDamage").textContent,"14");
             game.leftClick(1000,350);
-            assert.equal(game.run("bullets[0].damage"),23);
+            assert.equal(game.run("bullets[0].damage"),14);
             game.run("awardXp(getXpRequired())");
-            assert.equal(game.run("getRakeDamage()"),33);
-            assert.equal(game.run("bullets[0].damage"),23);
+            assert.equal(game.run("getRakeDamage()"),14);
+            assert.equal(game.run("bullets[0].damage"),14);
             assert.equal(game.run("player.damage"),8);
         } else {
             assert.equal(game.run(`player.unlocks.${id}`),true);
@@ -2596,10 +2590,10 @@ test("teleport explodes at departure from level two and its level three trail da
             for(const m of monsters){m.health=1000;m.maxHealth=1000;}`);
         game.key("1");game.leftClick(900,350);
         assert.equal(game.run("player.x"),900);
-        assert.equal(game.run("originEnemy.health"),level>=2?940:1000);
+        assert.equal(game.run("originEnemy.health"),level>=2?964:1000);
         assert.equal(game.run("teleportTrails.length"),level===3?1:0);
         game.run("updateAbilityEffects(50)");
-        assert.equal(game.run("trailEnemy.health"),level===3?999.25:1000);
+        assert.equal(game.run("trailEnemy.health"),level===3?999.55:1000);
         assert.equal(game.run("safeEnemy.health"),1000);
         game.run("gameClock.elapsedMs=3000;updateAbilityEffects(50)");
         assert.equal(game.run("teleportTrails.length"),0);
@@ -2631,7 +2625,7 @@ test("level two lure pulls much faster and level three explodes once on expiry",
         game.key("5");game.leftClick(900,350);game.run("updateMonsters(50)");
         traveled.push(game.run("prey.x-650"));
         game.run("prey.x=900;gameClock.elapsedMs=10000;updateLure();updateLure()");
-        assert.equal(game.run("prey.health"),level===3?920:1000);
+        assert.equal(game.run("prey.health"),level===3?952:1000);
         assert.equal(game.run("abilityBursts.length"),level===3?1:0);
         assert.equal(game.run("abilityState.lure.point"),null);
     }
@@ -2663,7 +2657,7 @@ test("cooldown attempts flash the remaining time near the cursor without casting
 test("seed value purchases increase both already-spawned and future hay, including mass harvest", () => {
     const game=createCombatGame();game.run("player.seeds=100;hayStacks.push({x:player.x,y:player.y,seeds:10});purchaseUpgrade('seedValue');updateHayStacks()");
     assert.equal(game.run("player.seeds"),100);
-    assert.ok(Math.abs(game.run("player.seedRemainder")-0.1)<1e-9);
+    assert.ok(Math.abs(game.run("player.seedRemainder")-0.15)<1e-9);
     game.run("hayStacks.push({x:900,y:350,seeds:20},{x:1000,y:350,seeds:10});harvestPickups.push({x:player.x,y:player.y});updateHarvestPickups([{x1:player.x,y1:player.y,x2:player.x,y2:player.y}])");
     assert.equal(game.run("player.seeds"),130);
     game.run("hayStacks.push({x:player.x,y:player.y,seeds:60});updateHayStacks()");
@@ -2697,7 +2691,7 @@ test("uncapped critical chance produces stronger shots beyond 100 percent", () =
 
 test("repeated seed upgrades stay linear and fractional rewards are independent of collection method", () => {
     const game=createCombatGame();game.run("for(let i=0;i<100;i++)applyUpgrade('seedValue')");
-    assert.ok(Math.abs(game.run("player.seedMultiplier")-2)<1e-9,"100 upgrades double value rather than compounding");
+    assert.ok(Math.abs(game.run("player.seedMultiplier")-2.5)<1e-9,"100 upgrades add 150% of base value rather than compounding");
     const individually=createCombatGame(), together=createCombatGame();
     for(const current of [individually,together]) current.run("applyUpgrade('seedValue');for(let i=0;i<10;i++)hayStacks.push({x:player.x,y:player.y,seeds:10})");
     individually.run("updateHayStacks()");
@@ -2722,10 +2716,10 @@ test("mystery rerolls spend seeds, replace choices, grow cost, and keep the game
 });
 
 test("rerolls refuse to charge when no different eligible rewards exist or the tab is hidden", () => {
-    const game=createCombatGame();game.run("player.seeds=1000;player.level=20;for(const n of ['piercingRound','knockback','explosiveKernel','ricochet'])player.unlocks[n]=true;openMysteryChoice()");
+    const game=createCombatGame();game.run("player.seeds=1000;const originalBonuses=getMysteryBonuses;getMysteryBonuses=()=>originalBonuses().slice(0,3);openMysteryChoice()");
     assert.equal(game.run("rerollMysteryChoices()"),false);assert.equal(game.run("player.seeds"),1000);
     assert.match(game.elements.get("rerollMessage").textContent,/already shown/);
-    game.run("chooseMysteryBonus(0);player.level=1;openMysteryChoice()");
+    game.run("chooseMysteryBonus(0);getMysteryBonuses=originalBonuses;openMysteryChoice()");
     const before=game.run("player.seeds");game.document.hidden=true;
     assert.equal(game.run("rerollMysteryChoices()"),false);assert.equal(game.run("player.seeds"),before);
 });
@@ -2750,4 +2744,201 @@ test("level three wall-phasing dash retains top/bottom wrapping and safe landing
     game.run("useDash(500,gameHudHeight-100)");for(let i=0;i<8;i++)game.advance(50);
     assert.ok(Math.abs(game.run("player.y")-expected)<0.01);
     assert.equal(game.run("bodyTouchesWall(player.x,player.y,player.size/2,true)"),false);
+});
+
+test("every fifth level queues a boss once and pauses defer its arrival", () => {
+    const game=createCombatGame();
+    game.run("player.level=4;player.xp=getXpRequired()-1;awardXp(1);queueBossForLevel(5)");
+    assert.deepEqual(game.read("bossState.queue"),[5]);
+    game.key(" ");game.advance(50);assert.equal(game.run("isBossEncounterActive()"),false);
+    game.key(" ");game.elements.get("abilityInfoBtn").emit("click");game.advance(50);
+    assert.equal(game.run("isBossEncounterActive()"),false);
+    game.elements.get("closeAbilityGuideBtn").emit("click");game.advance(50);
+    assert.equal(game.run("bossState.active.bossLevel"),5);
+    assert.equal(game.run("bossState.active.maxHealth"),800);
+    assert.ok(game.run("bossState.active.radius>monsterTypes.brute.radius"));
+    game.run("queueBossForLevel(10);queueBossForLevel(15);queueBossForLevel(10);updateBossEncounter()");
+    assert.deepEqual(game.read("bossState.queue"),[10,15]);
+    assert.equal(game.run("monsters.filter(m=>m.type==='boss').length"),1);
+});
+
+test("a boss creates a clear stationary arena with no deathzone or regular spawns", () => {
+    const game=createCombatGame({scrolling:true});
+    game.run("walls.push({x:500,y:200,width:80,height:300});player.x=20;queueBossForLevel(5);updateBossEncounter()");
+    const before=game.read("({scroll:worldState.scroll,health:player.health,count:monsters.length})");
+    assert.equal(game.run("walls.length"),0);
+    game.run("monsterState.nextSpawnAt=0;scrollWorld(50);updateDeathZone(1000);updateMonsterSpawning()");
+    assert.deepEqual(game.read("({scroll:worldState.scroll,health:player.health,count:monsters.length})"),before);
+    game.drawing.length=0;game.run("drawDeathZone()");assert.equal(game.drawing.length,0);
+    game.run("gameClock.elapsedMs=300;drawBossEncounter()");
+    assert.ok(game.drawing.some(call=>call.name==='fillText' && call.args[0]==='OBSIDIAN COLOSSUS'));
+    game.key(" ");const boss=game.read("bossState.active");game.advance(20000);
+    assert.deepEqual(game.read("bossState.active"),boss);
+});
+
+test("boss death restores the world and drops loot only once; later bosses are stronger and larger", () => {
+    const game=createCombatGame({scrolling:true});
+    game.run("queueBossForLevel(5);queueBossForLevel(10);updateBossEncounter();const firstBoss=bossState.active;damageMonster(firstBoss,100000);damageMonster(firstBoss,100000);bossDefeated(firstBoss)");
+    assert.equal(game.run("isBossEncounterActive()"),false);
+    assert.equal(game.run("monsterState.defeated"),1);
+    assert.equal(game.run("mysteryBoxes.filter(b=>b.bossDrop).length"),3);
+    assert.deepEqual(game.read("bossLootDrops.map(p=>p.kind).sort()"),["seeds","weapon"]);
+    assert.equal(game.run("player.rakeTier"),1,"weapon improves only when collected");
+    game.run("const priorScroll=worldState.scroll;scrollWorld(50)");
+    assert.ok(game.run("worldState.scroll>priorScroll"));
+    game.run("player.x=20;worldState.zoneExposure=0;updateDeathZone(1000)");assert.ok(game.run("player.health<player.maxHealth"));
+    game.run("gameClock.elapsedMs=bossState.nextEncounterAt-1;updateBossEncounter()");assert.equal(game.run("isBossEncounterActive()"),false);
+    game.run("gameClock.elapsedMs++;updateBossEncounter()");
+    assert.equal(game.run("bossState.active.bossLevel"),10);
+    assert.ok(game.run("bossState.active.maxHealth>firstBoss.maxHealth && bossState.active.damage>firstBoss.damage && bossState.active.radius>firstBoss.radius"));
+});
+
+test("boss spawning bypasses the regular population cap, stays bounded after knockback and resize", () => {
+    const game=createCombatGame();
+    game.run("for(let i=0;i<60;i++)spawnMonster('crawler');queueBossForLevel(5);updateBossEncounter()");
+    assert.equal(game.run("monsters.length"),61);assert.equal(game.run("bossState.active.type"),"boss");
+    game.run("bossState.active.x=5000;bossState.active.y=-5000;clampMonsterToMap(bossState.active)");
+    assert.ok(game.run("bossState.active.x<=canvas.width-bossState.active.radius && bossState.active.y>=gameHudHeight+bossState.active.radius"));
+    game.window.innerWidth=200;game.window.innerHeight=240;game.window.emit("resize");
+    assert.ok(game.run("Number.isFinite(bossState.active.x) && bossState.active.radius<50"));
+    game.run("endGame();queueBossForLevel(10);bossState.active=null;updateBossEncounter()");assert.equal(game.run("bossState.active"),null);
+});
+
+test("weapon loot upgrades independently of XP and continues beyond the original twenty styles", () => {
+    const game=createCombatGame();game.leftClick(1000,350);
+    const first=game.read("bullets[0]");game.run("upgradeRakeWeapon()");
+    assert.equal(game.run("player.level"),1);assert.equal(game.run("player.rakeTier"),2);
+    assert.equal(game.run("getRakeDamage()"),14);assert.equal(game.run("getRake().name"),"Copper Tines");
+    assert.equal(game.run("bullets[0].damage"),first.damage);assert.equal(game.run("bullets[0].level"),1);
+    game.run("player.rakeTier=20;upgradeRakeWeapon()");
+    assert.equal(game.run("player.rakeTier"),21);assert.equal(game.run("getRakeDamage()"),52);
+    assert.match(game.run("getRake().name"),/Ascended/);
+    game.run("drawRake(ctx,100,100,0,player.rakeTier);awardXp(100000)");
+    assert.equal(game.run("getRakeDamage()"),52);
+});
+
+test("expanded mystery rewards provide over thirty unique cards that apply once without changing permanent progression", () => {
+    const probe = createCombatGame();
+    probe.run("player.health=40;abilityState.teleport.lastUsedAt=gameClock.elapsedMs;hayStacks.push({x:800,y:350,seeds:20});placeMonster('brute',900,350)");
+    const ids = probe.read("getMysteryBonuses().map(card=>card.id)");
+    assert.ok(ids.length >= 30);
+    assert.equal(new Set(ids).size, ids.length);
+    for (const id of ids) {
+        const storage = abilitySave(123, { teleport: 2, rakeFrenzy: 3 });
+        const saved = storage.get("seedHarvester.abilityProgress.v1");
+        const game = createCombatGame({ storage });
+        game.run("player.health=40;abilityState.teleport.lastUsedAt=gameClock.elapsedMs;hayStacks.push({x:800,y:350,seeds:20});placeMonster('brute',900,350)");
+        assert.equal(game.run(`openMysteryChoice();lootState.choices[0]=getMysteryBonuses().find(card=>card.id===${JSON.stringify(id)});chooseMysteryBonus(0)`), true, id);
+        assert.equal(game.run("chooseMysteryBonus(0)"), false, id + " cannot be claimed twice");
+        assert.equal(game.run("gameClock.paused"), false, id);
+        assert.equal(game.run("Number.isFinite(player.health)&&Number.isFinite(player.seeds)&&player.health>0"), true, id);
+        assert.equal(storage.get("seedHarvester.abilityProgress.v1"), saved, id);
+        assert.deepEqual(game.read("({coins:abilityProgress.coins,teleport:getAbilityLevel('teleport'),frenzy:getAbilityLevel('rakeFrenzy')})"), { coins: 123, teleport: 2, frenzy: 3 }, id);
+    }
+});
+
+test("regeneration rewards heal during active simulation and stop while paused or selecting cards", () => {
+    const game = createCombatGame();
+    game.run("player.health=50;getMysteryBonuses().find(card=>card.id==='regeneration').apply()");
+    for (let i = 0; i < 20; i++) game.advance(50);
+    assert.ok(Math.abs(game.run("player.health") - 50.3) < 1e-9);
+    game.key(" ");
+    for (let i = 0; i < 20; i++) game.advance(50);
+    game.run("updateMysteryBonuses(1000)");
+    assert.ok(Math.abs(game.run("player.health") - 50.3) < 1e-9);
+    game.key(" "); game.run("openMysteryChoice()"); game.advance(30000);
+    assert.ok(Math.abs(game.run("player.health") - 50.3) < 1e-9);
+    game.run("lootState.choices[0]=getMysteryBonuses().find(card=>card.id==='seeds');chooseMysteryBonus(0)");
+    for (let i = 0; i < 20; i++) game.advance(50);
+    assert.ok(Math.abs(game.run("player.health") - 50.6) < 1e-9);
+});
+
+test("armor, kill healing and extra XP rewards affect contact and defeated enemies", () => {
+    const game = createCombatGame();
+    game.run(`for(const id of ['armor','killHealing','xpBonus'])getMysteryBonuses().find(card=>card.id===id).apply();
+        const enemy=placeMonster('brute',player.x,player.y);enemy.damage=11;enemy.xpReward=20;
+        updateMonsterContact();`);
+    assert.equal(game.run("player.health"), 90);
+    game.key(" "); game.run("monsterState.playerInvulnerableUntil=0;updateMonsterContact()");
+    assert.equal(game.run("player.health"), 90);
+    game.key(" "); game.run("damageMonster(enemy,enemy.health)");
+    assert.ok(Math.abs(game.run("player.health") - 90.4) < 1e-9);
+    assert.equal(game.run("player.xp"), 22);
+    assert.equal(game.run("player.level"), 1);
+    game.run("damageMonster(enemy,1000)");
+    assert.equal(game.run("player.xp"), 22, "an already defeated enemy grants no second reward");
+});
+
+test("pickup magnet reaches hay and potions beyond normal collection range without collecting while paused", () => {
+    const game = createCombatGame();
+    game.run(`player.x=500;player.y=350;player.health=50;player.seeds=0;
+        hayStacks.push({x:player.x+player.size/2+haySettings.size*.35+20,y:player.y,seeds:20,spawnedAt:gameClock.elapsedMs});
+        healthPotions.push({x:player.x+player.size/2+19+20,y:player.y,spawnedAt:gameClock.elapsedMs});
+        const pickupPath=[{x1:player.x,y1:player.y,x2:player.x,y2:player.y}];
+        updateHayStacks();updateLootPickups(pickupPath);`);
+    assert.equal(game.run("hayStacks.length+healthPotions.length"), 2);
+    game.run("getMysteryBonuses().find(card=>card.id==='magnet').apply()");
+    game.key(" "); game.run("updateHayStacks();updateLootPickups(pickupPath)");
+    assert.equal(game.run("hayStacks.length+healthPotions.length"), 2);
+    game.key(" "); game.run("updateHayStacks();updateLootPickups(pickupPath)");
+    assert.equal(game.run("hayStacks.length+healthPotions.length"), 0);
+    assert.equal(game.run("player.seeds"), 20);
+    assert.equal(game.run("player.health"), 85);
+});
+
+test("level cards grant exactly one unlimited character level while weapon cards advance only the rake", () => {
+    const game = createCombatGame();
+    game.run("player.level=24;player.xp=50;player.rakeTier=3;mysteryBonuses.xpBonus=1;openMysteryChoice();lootState.choices[0]=getMysteryBonuses().find(card=>card.id==='level');chooseMysteryBonus(0)");
+    assert.deepEqual(game.read("({level:player.level,xp:player.xp,tier:player.rakeTier,queue:bossState.queue})"), { level: 25, xp: 0, tier: 3, queue: [25] });
+    const damage = game.run("getRakeDamage()");
+    game.run("openMysteryChoice();lootState.choices[0]=getMysteryBonuses().find(card=>card.id==='weaponUpgrade');chooseMysteryBonus(0)");
+    assert.deepEqual(game.read("({level:player.level,xp:player.xp,tier:player.rakeTier})"), { level: 25, xp: 0, tier: 4 });
+    assert.ok(game.run("getRakeDamage()") > damage);
+});
+
+test("three boss mystery boxes each survive reward selection and expire after five active seconds", () => {
+    const game = createCombatGame();
+    game.run(`dropBossLoot(1,player);for(const box of mysteryBoxes)Object.assign(box,{x:player.x,y:player.y});
+        const lootPath=[{x1:player.x,y1:player.y,x2:player.x,y2:player.y}];`);
+    assert.equal(game.run("mysteryBoxes.length"), 3);
+    for (let remaining = 2; remaining >= 0; remaining--) {
+        game.run("updateLootPickups(lootPath)");
+        assert.equal(game.run("mysteryBoxes.length"), remaining);
+        assert.equal(game.run("isMysteryChoiceOpen()"), true);
+        game.advance(30000);
+        assert.equal(game.run("mysteryBoxes.length"), remaining);
+        assert.equal(game.run("gameClock.elapsedMs"), 0);
+        game.run("lootState.choices[0]=getMysteryBonuses().find(card=>card.id==='seeds');chooseMysteryBonus(0)");
+    }
+    const expiry = createCombatGame();
+    expiry.run("dropBossLoot(1,player);for(const box of mysteryBoxes)Object.assign(box,{x:1000,y:350})");
+    expiry.advance(4999); assert.equal(expiry.run("mysteryBoxes.length"), 3);
+    expiry.advance(1); assert.equal(expiry.run("mysteryBoxes.length"), 0);
+});
+
+test("boss jackpot and weapon drops wait for pickup and can each be claimed only once", () => {
+    const game = createCombatGame();
+    game.run("player.seeds=0;player.xp=17;dropBossLoot(2,player);mysteryBoxes.length=0");
+    assert.equal(game.run("bossLootDrops.length"), 2);
+    assert.deepEqual(game.read("({level:player.level,xp:player.xp,tier:player.rakeTier,seeds:player.seeds})"), { level: 1, xp: 17, tier: 1, seeds: 0 });
+    game.run(`for(const drop of bossLootDrops)Object.assign(drop,{x:player.x,y:player.y});
+        const dropPath=[{x1:player.x,y1:player.y,x2:player.x,y2:player.y}];
+        updateLootPickups(dropPath);updateLootPickups(dropPath);`);
+    assert.equal(game.run("bossLootDrops.length"), 0);
+    assert.deepEqual(game.read("({level:player.level,xp:player.xp,tier:player.rakeTier,seeds:player.seeds})"), { level: 1, xp: 17, tier: 2, seeds: 1000 });
+});
+
+test("expanded mystery rerolls exclude owned rake effects and do not repeat the current three cards", () => {
+    const game = createCombatGame();
+    game.run("for(const name of ['piercingRound','knockback','explosiveKernel','ricochet'])player.unlocks[name]=true;player.seeds=10000;openMysteryChoice()");
+    let previous = game.read("lootState.choices.map(card=>card.id)");
+    for (let i = 0; i < 5; i++) {
+        const seeds = game.run("player.seeds"), cost = game.run("getMysteryRerollCost()");
+        assert.equal(game.run("rerollMysteryChoices()"), true);
+        const current = game.read("lootState.choices.map(card=>card.id)");
+        assert.equal(new Set(current).size, 3);
+        assert.ok(current.every(id => !previous.includes(id) && !['piercingRound','knockback','explosiveKernel','ricochet'].includes(id)));
+        assert.equal(game.run("player.seeds"), seeds - cost);
+        previous = current;
+    }
 });

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SeedHarvesterPro</title><link rel="stylesheet" href="css/index-v1.css?v=22"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SeedHarvesterPro</title><link rel="stylesheet" href="css/index-v1.css?v=23"></head>
 <body>
         <div id="soundHome">
             <button id="keybindingsBtn" type="button">⌨ Keys</button>
@@ -19,12 +19,12 @@
         </div>
 
 <main id="initialView">
-    <h1>Seed harvester pro</h1>
+    <h1>Seed harvester pro <span class="gameVersion">v0.3.0</span></h1>
     <p>Keep moving. Gather seeds. Survive the horde.</p>
     <div class="initialChoices">
         <section class="startCard">
             <img src="imgs/seed-harvester.png" alt="Your seed harvester" width="180" height="200">
-            <h2>The harvester</h2><p>Outrun the red zone and evolve your rake through 20 levels.</p>
+            <h2>The harvester</h2><p>Keep leveling without a limit. Find better rakes in mystery boxes and boss loot.</p>
             <button id="startGameBtn" type="button">Start game</button><p id="startMessage" role="status">All six abilities are ready from the start.</p>
             <div class="startAbilities">
                 <div class="startAbilitiesHeading"><h3>Your abilities</h3><span class="coinWallet"><img src="imgs/coin.svg" alt="Coins"><strong id="menuCoins">0</strong></span></div>
@@ -56,7 +56,7 @@
     </section>
     <section id="enemyGuide" aria-labelledby="enemyGuideHeading">
         <h2 id="enemyGuideHeading">Know your enemies</h2>
-        <p>They come from the right and grow stronger every 30 seconds.</p>
+        <p>Enemies grow stronger with time. Every 5 levels, the Obsidian Colossus arrives: the map stops and the red zone disappears until you defeat it. Bosses drop a seed jackpot, a weapon upgrade, and three mystery boxes.</p>
         <ul id="enemyList"></ul>
     </section>
 </main>
@@ -64,14 +64,14 @@
 <header hidden id="gameHud">
     <section id="timeHud" aria-label="Time played"><span>Time</span><span id="gameTime" role="timer" aria-live="off">00:00</span></section>
     <section class="hudBar"><span>HP</span><div class="barBackground"><div id="healthBar"></div></div><span id="healthText">100 / 100</span></section>
-    <section id="xpHud" aria-label="Character experience"><strong id="playerLevel">1/20</strong><div class="xpDetails"><div id="xpMeter" role="progressbar" aria-label="Experience to next level" aria-valuemin="0" aria-valuemax="40" aria-valuenow="0"><div id="xpBar"></div></div><span id="xpText">0 / 40 XP</span></div></section>
+    <section id="xpHud" aria-label="Character experience"><strong id="playerLevel">Lv 1</strong><div class="xpDetails"><div id="xpMeter" role="progressbar" aria-label="Experience to next level" aria-valuemin="0" aria-valuemax="40" aria-valuenow="0"><div id="xpBar"></div></div><span id="xpText">0 / 40 XP</span></div></section>
     <div id="currencyHud"><section id="seedHud"><img src="imgs/seeds/1.svg" alt="Seeds"><span id="seedHudCount">0</span></section><section id="coinHud" aria-label="Permanent coins"><img src="imgs/coin.svg" alt="Coins"><span id="hudCoins">0</span></section></div>
     <button id="pauseBtn" type="button" aria-pressed="false" aria-keyshortcuts="Space" title="Pause or resume (Space)">Pause (Space)</button>
 </header>
 <div hidden id="pauseOverlay" role="status">Paused · Press Space to resume</div>
 <div hidden id="cooldownResetNotice" role="status" aria-live="polite"></div>
 <div hidden id="abilityHint" role="status"></div>
-<aside hidden id="statsPanel" aria-label="Player, basic attack, harvest and cooldown stats">
+<aside hidden id="statsPanel" aria-label="Player, basic attack, harvest, rake effects and cooldown stats">
     <div class="statsHeader"><button id="statsToggle" type="button" aria-expanded="true" aria-controls="statsContent">Stats −</button><button id="statsDragHandle" type="button" title="Drag to move, or use arrow keys when focused" aria-label="Move stats panel">⠿</button></div>
     <div id="statsContent">
 <h3>Player</h3>
@@ -81,12 +81,14 @@
 </dl>
 <h3>Basic attack</h3>
 <dl>
-    <div><dt>Damage</dt><dd><span id="statDamage"></span><button type="button" class="statUpgradeButton" id="upgradeDamage" data-upgrade="damage" data-cost="2" data-repeatable="true" data-label="Basic attack damage" data-benefit="Adds 0.16 basic attack damage.">2</button></dd></div>
-    <div><dt>Shot speed</dt><dd><span id="statBulletSpeed"></span><button type="button" class="statUpgradeButton" id="upgradeBulletSpeed" data-upgrade="bulletSpeed" data-cost="1" data-repeatable="true" data-label="Basic attack speed" data-benefit="Adds 6 px/s projectile speed.">1</button></dd></div>
-    <div><dt>Fire rate</dt><dd><span id="statFireRate"></span><button type="button" class="statUpgradeButton" id="upgradeFireRate" data-upgrade="fireRate" data-cost="2" data-repeatable="true" data-label="Basic attack fire rate" data-benefit="Adds 0.01 shots per second.">2</button></dd></div>
-    <div><dt>Crit chance</dt><dd><span id="statCriticalChance"></span><button type="button" class="statUpgradeButton" id="upgradeCriticalChance" data-upgrade="criticalChance" data-cost="2" data-repeatable="true" data-label="Basic attack critical chance" data-benefit="Adds 0.25 percentage points. Each full 100% guarantees an extra damage tier; the remainder can add another.">2</button></dd></div>
+    <div><dt>Damage</dt><dd><span id="statDamage"></span><button type="button" class="statUpgradeButton" id="upgradeDamage" data-upgrade="damage" data-cost="2" data-repeatable="true" data-label="Basic attack damage" data-benefit="Adds 0.24 basic attack damage.">2</button></dd></div>
+    <div><dt>Shot speed</dt><dd><span id="statBulletSpeed"></span><button type="button" class="statUpgradeButton" id="upgradeBulletSpeed" data-upgrade="bulletSpeed" data-cost="1" data-repeatable="true" data-label="Basic attack speed" data-benefit="Adds 9 px/s projectile speed.">1</button></dd></div>
+    <div><dt>Fire rate</dt><dd><span id="statFireRate"></span><button type="button" class="statUpgradeButton" id="upgradeFireRate" data-upgrade="fireRate" data-cost="2" data-repeatable="true" data-label="Basic attack fire rate" data-benefit="Adds 0.015 shots per second.">2</button></dd></div>
+    <div><dt>Crit chance</dt><dd><span id="statCriticalChance"></span><button type="button" class="statUpgradeButton" id="upgradeCriticalChance" data-upgrade="criticalChance" data-cost="2" data-repeatable="true" data-label="Basic attack critical chance" data-benefit="Adds 0.35 percentage points. Each full 100% guarantees an extra damage tier; the remainder can add another.">2</button></dd></div>
 </dl>
-<h3>Harvest</h3><dl><div><dt>Seed value</dt><dd><span id="statSeedValue"></span><button type="button" class="statUpgradeButton" id="upgradeSeedValue" data-upgrade="seedValue" data-cost="10" data-repeatable="true" data-label="Seed value" data-benefit="Adds 1% of original stack value. Fractional bonus seeds carry over between pickups.">10</button></dd></div></dl>
+<h3>Harvest</h3><dl><div><dt>Seed value</dt><dd><span id="statSeedValue"></span><button type="button" class="statUpgradeButton" id="upgradeSeedValue" data-upgrade="seedValue" data-cost="10" data-repeatable="true" data-label="Seed value" data-benefit="Adds 1.5% of original stack value. Fractional bonus seeds carry over between pickups.">10</button></dd></div></dl>
+<section id="rakeEffectsStats" aria-label="Rake weapon and effects"><h3>Rake · <span id="rakeEffectsCount">0/4</span></h3><p id="statRakeName"></p><p class="rakeStatDamage">Damage <strong id="statRakeDamage"></strong></p><p id="statWeaponEffects" hidden></p><dl><div><dt>Piercing Round</dt><dd id="effectState-piercingRound">Locked</dd></div><div><dt>Knockback</dt><dd id="effectState-knockback">Locked</dd></div><div><dt>Explosive Kernel</dt><dd id="effectState-explosiveKernel">Locked</dd></div><div><dt>Ricochet</dt><dd id="effectState-ricochet">Locked</dd></div></dl><p class="statsNote">Effects from mystery boxes.</p></section>
+<h3>Run bonuses</h3><p id="runBonusesSummary" class="statsNote"></p>
 <h3>Ability cooldowns</h3>
 <dl>
     <div><dt>Teleport</dt><dd><span id="statCooldown-teleport"></span><button type="button" class="statUpgradeButton" id="upgradeCooldown-teleport" data-upgrade="cooldown-teleport" data-cost="8" data-repeatable="true" data-label="Teleport cooldown" data-benefit="Reduces the current cooldown by 0.5%.">8</button></dd></div>
@@ -99,7 +101,7 @@
 </div>
 </aside>
 <footer hidden id="bottomHud">
-    <div id="rakeHud"><strong id="rakeName">Field Rake</strong><span id="rakeStatus">Left-click · Ready</span><details id="rakeLoadout"><summary>Rake effects <span id="rakeEffectsCount">0/4</span></summary><div class="rakeLoadoutContent"><strong id="statRakeName"></strong><p>Throw damage: <span id="statRakeDamage"></span></p><p id="statWeaponEffects"></p><p>Find effects in mystery boxes. They last for this run.</p><dl><div><dt>Piercing Round</dt><dd id="effectState-piercingRound">Locked</dd></div><div><dt>Knockback</dt><dd id="effectState-knockback">Locked</dd></div><div><dt>Explosive Kernel</dt><dd id="effectState-explosiveKernel">Locked</dd></div><div><dt>Ricochet</dt><dd id="effectState-ricochet">Locked</dd></div></dl></div></details></div>
+    <div id="rakeHud"><strong id="rakeName">Field Rake</strong><span id="rakeStatus">Left-click · Ready</span></div>
     <section id="abilityBar" aria-label="Abilities"><button type="button" class="abilityHudItem ready" id="abilityTeleport" aria-pressed="false"><span class="abilityIconVisual"><b id="teleportHudIcon" aria-hidden="true">◎</b> Teleport</span><span class="abilityKeyCircle" id="teleportKey" aria-hidden="true">1</span><span class="abilityCooldownText" id="teleportCooldownText">✓ Ready</span><span class="abilityProgress" aria-hidden="true"><span id="teleportProgress"></span></span><span class="abilityLevelBadge" id="teleportLevel">Lv 1</span></button><button type="button" class="abilityHudItem ready" id="abilityEnergyShield" aria-pressed="false"><span class="abilityIconVisual"><b id="energyShieldHudIcon" aria-hidden="true">◇</b> Energy Shield</span><span class="abilityKeyCircle" id="energyShieldKey" aria-hidden="true">2</span><span class="abilityCooldownText" id="energyShieldCooldownText">✓ Ready</span><span class="abilityProgress" aria-hidden="true"><span id="energyShieldProgress"></span></span><span class="abilityLevelBadge" id="energyShieldLevel">Lv 1</span></button><button type="button" class="abilityHudItem ready" id="abilityDash" aria-pressed="false"><span class="abilityIconVisual"><b id="dashHudIcon" aria-hidden="true">➜</b> Dash</span><span class="abilityKeyCircle" id="dashKey" aria-hidden="true">3</span><span class="abilityCooldownText" id="dashCooldownText">✓ Ready</span><span class="abilityProgress" aria-hidden="true"><span id="dashProgress"></span></span><span class="abilityLevelBadge" id="dashLevel">Lv 1</span></button><button type="button" class="abilityHudItem ready" id="abilityTimeFreeze" aria-pressed="false"><span class="abilityIconVisual"><b id="timeFreezeHudIcon" aria-hidden="true">❄</b> Time Freeze</span><span class="abilityKeyCircle" id="timeFreezeKey" aria-hidden="true">4</span><span class="abilityCooldownText" id="timeFreezeCooldownText">✓ Ready</span><span class="abilityProgress" aria-hidden="true"><span id="timeFreezeProgress"></span></span><span class="abilityLevelBadge" id="timeFreezeLevel">Lv 1</span></button><button type="button" class="abilityHudItem ready" id="abilityLure" aria-pressed="false"><span class="abilityIconVisual"><b id="lureHudIcon" aria-hidden="true">✦</b> Lure</span><span class="abilityKeyCircle" id="lureKey" aria-hidden="true">5</span><span class="abilityCooldownText" id="lureCooldownText">✓ Ready</span><span class="abilityProgress" aria-hidden="true"><span id="lureProgress"></span></span><span class="abilityLevelBadge" id="lureLevel">Lv 1</span></button><button type="button" class="abilityHudItem ready" id="abilityRakeFrenzy" aria-pressed="false"><span class="abilityIconVisual"><b id="rakeFrenzyHudIcon" aria-hidden="true">⚡</b> Rake Frenzy</span><span class="abilityKeyCircle" id="rakeFrenzyKey" aria-hidden="true">6</span><span class="abilityCooldownText" id="rakeFrenzyCooldownText">✓ Ready</span><span class="abilityProgress" aria-hidden="true"><span id="rakeFrenzyProgress"></span></span><span class="abilityLevelBadge" id="rakeFrenzyLevel">Lv 1</span></button></section>
     <div id="abilityTools"><button id="abilityInfoBtn" type="button">ⓘ Abilities</button><button id="autoTargetToggle" type="button" aria-pressed="true" aria-keyshortcuts="C" title="Switch basic attack aim: closest enemy or mouse (C)">Aim: Auto (C)</button></div>
 </footer>
@@ -118,5 +120,5 @@
     </div>
 <div class="mysteryReroll"><span>Seeds: <strong id="mysterySeedBalance">0</strong></span><button type="button" id="rerollMysteryBtn">Reroll · 50 seeds</button><span id="rerollMessage" role="status"></span></div>
 </dialog>
-<script src="js/audio-v1.js?v=3"></script><script src="js/world-v1.js?v=8"></script><script src="js/monsters-v1.js?v=9"></script><script src="js/progression-v1.js?v=5"></script><script src="js/history-v1.js?v=1"></script><script src="js/controls-v1.js?v=3"></script><script src="js/pickups-v1.js?v=1"></script><script src="js/loot-v1.js?v=3"></script><script src="js/ability-progress-v1.js?v=2"></script><script src="js/ability-effects-v1.js?v=2"></script><script src="js/game-v1.js?v=32"></script>
+<script src="js/audio-v1.js?v=3"></script><script src="js/world-v1.js?v=9"></script><script src="js/monsters-v1.js?v=10"></script><script src="js/boss-v1.js?v=1"></script><script src="js/progression-v1.js?v=6"></script><script src="js/history-v1.js?v=1"></script><script src="js/controls-v1.js?v=3"></script><script src="js/pickups-v1.js?v=2"></script><script src="js/rewards-v1.js?v=1"></script><script src="js/loot-v1.js?v=4"></script><script src="js/ability-progress-v1.js?v=2"></script><script src="js/ability-effects-v1.js?v=2"></script><script src="js/game-v1.js?v=33"></script>
 </body></html>

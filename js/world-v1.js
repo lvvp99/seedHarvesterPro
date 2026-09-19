@@ -117,11 +117,11 @@ function startScrollingWorld() {
 }
 
 function scrollWorld(deltaMs) {
-    if (!canControlPlayer() || !worldState.started || isTimeFreezeActive()) return;
+    if (!canControlPlayer() || !worldState.started || isTimeFreezeActive() || isBossEncounterActive()) return;
     const shift = getScrollSpeed() * Math.min(deltaMs, 50) / 1000;
     worldState.scroll += shift;
     worldState.nextWallX -= shift;
-    const carried = [player, ...walls, ...hayStacks, ...harvestPickups, ...cooldownPickups, ...mysteryBoxes, ...healthPotions, ...harvestBursts, ...dashTrail, ...monsters, ...bullets, ...collectionEffects, ...combatEffects, ...wallSparks];
+    const carried = [player, ...walls, ...hayStacks, ...harvestPickups, ...cooldownPickups, ...mysteryBoxes, ...healthPotions, ...bossLootDrops, ...harvestBursts, ...dashTrail, ...monsters, ...bullets, ...collectionEffects, ...combatEffects, ...wallSparks];
     carried.push(...abilityBursts);
     if (abilityState.dash.lastSafe) carried.push(abilityState.dash.lastSafe);
     for (const trail of teleportTrails) { trail.x1 -= shift; trail.x2 -= shift; }
@@ -311,6 +311,10 @@ function monsterNavigationTarget(monster, target) {
 
 function updateDeathZone(deltaMs) {
     if (!canControlPlayer()) return;
+    if (isBossEncounterActive()) {
+        worldState.zoneExposure = 0;
+        return;
+    }
     const exposed = player.x - player.size / 2 < getDeathZoneWidth();
     if (!exposed || isEnergyShieldActive()) {
         worldState.zoneExposure = 0;
@@ -320,7 +324,7 @@ function updateDeathZone(deltaMs) {
     worldState.zoneExposure += deltaMs;
     if (worldState.zoneExposure < worldSettings.zoneIntervalMs) return;
     worldState.zoneExposure %= worldSettings.zoneIntervalMs;
-    player.health = Math.max(0, player.health - worldSettings.zoneDamage);
+    player.health = Math.max(0, player.health - getMysteryDamageTaken(worldSettings.zoneDamage));
     worldState.zoneHitUntil = gameClock.elapsedMs + 220;
     gameAudio.play("hurt");
     if (player.health / player.maxHealth <= 0.25) gameAudio.play("lowHealth");
@@ -369,6 +373,7 @@ function drawWalls() {
 }
 
 function drawDeathZone() {
+    if (isBossEncounterActive()) return;
     const width = getDeathZoneWidth();
     const height = canvas.height - gameHudHeight;
     const pulse = 0.18 + Math.sin(gameClock.elapsedMs / 250) * 0.035;

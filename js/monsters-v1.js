@@ -5,7 +5,8 @@ const monsterTypes = {
     brute: { name: "Brute", description: "Slow, tough and hard-hitting. Keep your distance.", radius: 24, health: 68, speed: 28.75, damage: 15, xp: 6, color: "#b593e0", minTier: 0, weight: 20 },
     stalker: { name: "Stalker", description: "The fastest hunter. Use an ability to escape.", radius: 14, health: 36, speed: 110, damage: 10, xp: 5, color: "#5bd6cd", minTier: 1, weight: 14 },
     shellback: { name: "Shellback", description: "Heavily armored. Avoid getting cornered.", radius: 23, health: 120, speed: 34, damage: 20, xp: 10, color: "#729acb", minTier: 2, weight: 10 },
-    charger: { name: "Charger", description: "Glows, then rushes. Dodge or get behind a wall.", radius: 20, health: 76, speed: 70, damage: 22, xp: 8, color: "#e56a78", minTier: 3, weight: 12 }
+    charger: { name: "Charger", description: "Glows, then rushes. Dodge or get behind a wall.", radius: 20, health: 76, speed: 70, damage: 22, xp: 8, color: "#e56a78", minTier: 3, weight: 12 },
+    boss: { name: "Obsidian Colossus", description: "A massive black boss with enormous health. The map and death zone stop until it falls. Each encounter grows stronger and leaves rare loot.", radius: 50, health: 800, speed: 48, damage: 28, xp: 40, color: "#08080c", minTier: Infinity, weight: 0, availability: "Every 5 levels" }
 };
 
 const monsterSettings = {
@@ -37,7 +38,7 @@ function getMonsterDifficulty(elapsedMs = gameClock.elapsedMs) {
 }
 
 function getMonsterSpawnPool(tier = getMonsterDifficulty().tier) {
-    return Object.entries(monsterTypes).filter(([, type]) => type.minTier <= tier).map(([name, type]) => ({
+    return Object.entries(monsterTypes).filter(([, type]) => type.weight > 0 && type.minTier <= tier).map(([name, type]) => ({
         name, weight: type.minTier === 0 ? type.weight : Math.min(40, type.weight + (tier - type.minTier) * 3)
     }));
 }
@@ -94,7 +95,7 @@ function spawnMonster(type = randomMonsterType()) {
 }
 
 function updateMonsterSpawning() {
-    if (!canControlPlayer() || gameClock.elapsedMs < monsterState.nextSpawnAt) return;
+    if (!canControlPlayer() || isBossEncounterActive() || gameClock.elapsedMs < monsterState.nextSpawnAt) return;
     const difficulty = getMonsterDifficulty();
     for (let i = 0; i < difficulty.packSize && monsters.length < monsterSettings.maxAlive; i++) spawnMonster();
     const delay = difficulty.spawnIntervalMs * (0.85 + Math.random() * 0.3);
@@ -103,6 +104,13 @@ function updateMonsterSpawning() {
 }
 
 function clampMonsterToMap(monster) {
+    if (monster.type === "boss" && monster.bossStage) {
+        monster.radius = getBossRadius(monster.bossStage);
+        const top = Math.min(gameHudHeight, Math.max(0, canvas.height - 1));
+        monster.x = clamp(monster.x, monster.radius, Math.max(monster.radius, canvas.width - monster.radius));
+        monster.y = clamp(monster.y, top + monster.radius, Math.max(top + monster.radius, canvas.height - monster.radius));
+        return;
+    }
     monster.x = clamp(monster.x, -monster.radius * 4, canvas.width + monster.radius + 120);
     monster.y = clamp(monster.y, gameHudHeight - monster.radius, canvas.height + monster.radius);
 }
@@ -136,6 +144,7 @@ function updateMonsters(deltaMs) {
     const destination = getMonsterTarget();
     const targetRadius = isLureActive() ? 7 : player.size * 0.35;
     for (const monster of monsters) {
+        if (monster.type === "boss" && gameClock.elapsedMs < monster.moveAfter) continue;
         const pulled = isLureActive() && abilityState.lure.castLevel >= 2;
         const speedMultiplier = pulled ? 1 : chargerSpeedMultiplier(monster, seconds * 1000, destination);
         const target = monsterNavigationTarget(monster, destination);
@@ -143,7 +152,7 @@ function updateMonsters(deltaMs) {
         const dy = target.y - monster.y;
         const distance = Math.hypot(dx, dy);
         const stopRadius = target === destination ? monster.radius + targetRadius : 0;
-        const speed = pulled ? Math.max(420, monster.speed * 4) : monster.speed * speedMultiplier;
+        const speed = getMysteryMonsterSpeed(monster, pulled ? Math.max(420, monster.speed * 4) : monster.speed * speedMultiplier);
         const step = Math.min(speed * seconds, Math.max(0, distance - stopRadius));
         if (distance > 0) {
             moveActor(monster, dx / distance * step, dy / distance * step, monster.radius);
@@ -180,6 +189,8 @@ function damageMonster(monster, amount) {
     const index = monsters.indexOf(monster);
     if (index !== -1) monsters.splice(index, 1);
     monsterState.defeated++;
+    applyMysteryKillBonuses(monster);
+    if (monster.type === "boss") bossDefeated(monster);
     awardXp(monster.xpReward, monster);
 }
 
@@ -256,7 +267,7 @@ function updateMonsterContact() {
         gameAudio.play("block");
         return;
     }
-    player.health = Math.max(0, player.health - damage);
+    player.health = Math.max(0, player.health - getMysteryDamageTaken(damage));
     if (player.health > 0) {
         gameAudio.play("hurt");
         if (player.health / player.maxHealth <= 0.25) gameAudio.play("lowHealth");
@@ -274,6 +285,10 @@ function updateCombatEffects() {
 
 // Shared by the live map and the enemy guide so their illustrations always match.
 function drawMonsterBody(ctx, monster, target, elapsedMs = 0) {
+    if (monster.type === "boss") {
+        drawBossBody(ctx, monster, target, elapsedMs);
+        return;
+    }
     const radius = monster.radius;
     const variant = monsterTypes[monster.type];
     const angle = Math.atan2(target.y - monster.y, target.x - monster.x);
@@ -371,7 +386,7 @@ function renderEnemyGuide() {
         portrait.height = 80;
         portrait.setAttribute("aria-hidden", "true");
         drawMonsterBody(portrait.getContext("2d"), {
-            type, radius: variant.radius, x: 40, y: 44, hitUntil: 0, chargePhase: "pursuit"
+            type, radius: Math.min(26, variant.radius), x: 40, y: 44, hitUntil: 0, chargePhase: "pursuit"
         }, { x: 40, y: 80 });
         const summary = document.createElement("div");
         const name = document.createElement("h3");
@@ -379,8 +394,8 @@ function renderEnemyGuide() {
         const arrival = document.createElement("span");
         arrival.className = "enemyArrival";
         const seconds = variant.minTier * monsterSettings.difficultyStepMs / 1000;
-        arrival.textContent = seconds === 0 ? "From the start" : "From "
-            + String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
+        arrival.textContent = variant.availability || (seconds === 0 ? "From the start" : "From "
+            + String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0"));
         const description = document.createElement("p");
         description.textContent = variant.description;
         summary.appendChild(name);
@@ -419,7 +434,7 @@ function drawMonsters() {
         ctx.strokeText(label, x + width / 2, y - 4);
         ctx.fillText(label, x + width / 2, y - 4);
         ctx.font = "bold 10px Arial";
-        ctx.fillStyle = variant.color;
+        ctx.fillStyle = monster.type === "boss" ? "#ffaaa5" : variant.color;
         const nameX = clamp(monster.x, ctx.measureText(variant.name).width / 2 + 3,
             canvas.width - ctx.measureText(variant.name).width / 2 - 3);
         ctx.strokeText(variant.name, nameX, y - 16);

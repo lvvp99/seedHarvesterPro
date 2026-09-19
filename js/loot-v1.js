@@ -1,5 +1,6 @@
 const mysteryBoxes = [];
 const healthPotions = [];
+const bossLootDrops = [];
 const lootSettings = { mysteryLifetimeMs: 5000, potionLifetimeMs: 20000, potionHealing: 35, radius: 24 };
 const lootState = { nextMysteryAt: 20000, nextPotionAt: 12000, choosing: false, choices: [], rerolls: 0 };
 const mysteryDialog = document.getElementById("mysteryDialog");
@@ -19,7 +20,7 @@ function findLootPosition() {
         const point = findHayPosition();
         if (!point) return null;
         if (point.x < Math.max(canvas.width * 0.45, getDeathZoneWidth() + 60)) continue;
-        if ([...mysteryBoxes, ...healthPotions, ...harvestPickups, ...cooldownPickups]
+        if ([...mysteryBoxes, ...healthPotions, ...bossLootDrops, ...harvestPickups, ...cooldownPickups]
             .some(pickup => Math.hypot(pickup.x - point.x, pickup.y - point.y) < 75)) continue;
         return point;
     }
@@ -27,7 +28,7 @@ function findLootPosition() {
 }
 
 function spawnMysteryBox() {
-    if (mysteryBoxes.length || lootState.choosing) return false;
+    if (mysteryBoxes.some(box => !box.bossDrop) || lootState.choosing) return false;
     const point = findLootPosition();
     if (!point) return false;
     mysteryBoxes.push({ ...point, spawnedAt: gameClock.elapsedMs });
@@ -48,7 +49,7 @@ function restoreHealth(amount) {
     const restored = Math.min(amount, Math.max(0, player.maxHealth - player.health));
     if (restored <= 0) return 0;
     player.health += restored;
-    collectionEffects.push({ x: player.x, y: player.y - 28, label: "+" + restored + " HP", collectedAt: gameClock.elapsedMs });
+    collectionEffects.push({ x: player.x, y: player.y - 28, label: "+" + Number(restored.toFixed(1)) + " HP", collectedAt: gameClock.elapsedMs });
     gameAudio.play("collect"); updateHud();
     return restored;
 }
@@ -59,13 +60,13 @@ function getMysteryBonuses() {
             apply() { player.seeds += 1000; } },
         { id: "vitality", icon: "♥", kind: "For this run", name: "Deep roots", description: "Gain 25 maximum HP and restore 25 HP.",
             apply() { player.maxHealth += 25; restoreHealth(25); } },
-        { id: "rakePower", icon: "✦", kind: "For this run", name: "Sharpened tines", description: "Your thrown rake deals 15% more damage, including at future levels.",
+        { id: "rakePower", icon: "✦", kind: "For this run", name: "Sharpened tines", description: "Your thrown rake deals 15% more damage, including future weapon upgrades.",
             apply() { player.rakeDamageMultiplier *= 1.15; } }
     ];
     if (player.health < player.maxHealth) bonuses.push({ id: "heal", icon: "✚", kind: "Recovery", name: "Second wind", description: "Restore all your missing health.",
         apply() { restoreHealth(player.maxHealth); } });
-    if (player.level < maxPlayerLevel) bonuses.push({ id: "level", icon: "↑", kind: "Level up", name: "Growing season", description: "Gain one character level and evolve your rake.",
-        apply() { awardXp(getXpRequired()); } });
+    bonuses.push({ id: "level", icon: "↑", kind: "Level up", name: "Growing season", description: "Gain exactly one character level. Every fifth level summons a stronger boss.",
+        apply() { awardXp(getXpRequired() - player.xp, player, false); } });
     if (Object.keys(abilityState).some(name => getCooldownRemainingMs(name) > 0)) bonuses.push({ id: "cooldowns", icon: "↻", kind: "Instant recharge", name: "Fresh start", description: "Reset all six ability cooldowns immediately.",
         apply() { resetAbilityCooldowns(); } });
     for (const [id, icon, name, description] of [
@@ -77,7 +78,64 @@ function getMysteryBonuses() {
         if (!player.unlocks[id]) bonuses.push({ id, icon, kind: "Free rake effect", name, description,
             apply() { player.unlocks[id] = true; } });
     }
-    return bonuses;
+    return bonuses.concat(getExtraMysteryBonuses());
+}
+
+function findNearbyLootPosition(anchor, occupied = [], index = 0) {
+    const radius = lootSettings.radius + 3;
+    if (canvas.width < radius * 2 || canvas.height - gameHudHeight < radius * 2) return null;
+    const left = Math.min(canvas.width / 2, getDeathZoneWidth() + radius + 20);
+    const right = Math.max(left, canvas.width - radius - 12);
+    const top = Math.min(canvas.height / 2, gameHudHeight + radius + 20);
+    const bottom = Math.max(top, canvas.height - radius - 20);
+    for (let attempt = 0; attempt < 90; attempt++) {
+        const angle = index * Math.PI * 0.4 + attempt * 2.399963;
+        const distance = 78 + Math.floor(attempt / 14) * 25;
+        const candidate = {
+            x: clamp(anchor.x + Math.cos(angle) * distance, left, right),
+            y: clamp(anchor.y + Math.sin(angle) * distance, top, bottom)
+        };
+        if (!bodyTouchesWall(candidate.x, candidate.y, radius)
+            && !occupied.some(pickup => Math.hypot(pickup.x - candidate.x, pickup.y - candidate.y) < 61)) return candidate;
+    }
+    // Tiny/resized arenas may not fit five separate drops. Overlap is safe: each box
+    // opens only one choice and leaves the others on the paused map until resumed.
+    const candidate = freeActorPoint({ x: clamp(anchor.x, left, right), y: clamp(anchor.y, top, bottom) }, radius);
+    return !bodyTouchesWall(candidate.x, candidate.y, radius) ? candidate : null;
+}
+
+function spawnMysterySupplies(kind, count) {
+    const occupied = [...mysteryBoxes, ...healthPotions, ...bossLootDrops];
+    let spawned = 0;
+    for (let index = 0; index < count; index++) {
+        const point = findNearbyLootPosition(player, occupied, index);
+        if (!point) continue;
+        const pickup = { ...point, spawnedAt: gameClock.elapsedMs };
+        if (kind === "hay") { pickup.seeds = 50; hayStacks.push(pickup); }
+        else if (kind === "potion") healthPotions.push(pickup);
+        occupied.push(pickup); spawned++;
+    }
+    return spawned;
+}
+
+function dropBossLoot(stage, point) {
+    // Keep the short-lived boxes within reach even when the final blow was ranged.
+    const distance = Math.hypot(point.x - player.x, point.y - player.y);
+    const fraction = distance > 100 ? 100 / distance : 1;
+    const anchor = { x: player.x + (point.x - player.x) * fraction, y: player.y + (point.y - player.y) * fraction };
+    const occupied = [...mysteryBoxes, ...healthPotions, ...bossLootDrops];
+    const rewards = ["mystery", "mystery", "mystery", "seeds", "weapon"];
+    for (let index = 0; index < rewards.length; index++) {
+        // The boss's cleared arena is a fallback if nearby passages are packed.
+        const position = findNearbyLootPosition(anchor, occupied, index) || freeActorPoint(point, lootSettings.radius);
+        const pending = canvas.width < 54 || canvas.height - gameHudHeight < 54
+            || bodyTouchesWall(position.x, position.y, lootSettings.radius);
+        const pickup = { ...position, spawnedAt: gameClock.elapsedMs, bossDrop: true, pending };
+        if (rewards[index] === "mystery") mysteryBoxes.push(pickup);
+        else bossLootDrops.push({ ...pickup, kind: rewards[index], seeds: 500 + stage * 250 });
+        occupied.push(pickup);
+    }
+    gameAudio.play("ready");
 }
 
 function rollMysteryChoices(previous = []) {
@@ -163,8 +221,14 @@ mysteryDialog.addEventListener("close", () => {
 
 function updateLootPickups(segments) {
     if (!canControlPlayer()) return;
+    for (const pickup of [...mysteryBoxes, ...bossLootDrops]) {
+        if (!pickup.pending) continue;
+        const point = findNearbyLootPosition(player, [...mysteryBoxes, ...bossLootDrops].filter(other => other !== pickup));
+        if (point) Object.assign(pickup, point, { pending: false, spawnedAt: gameClock.elapsedMs });
+    }
     for (const [pickups, lifetime] of [[mysteryBoxes, lootSettings.mysteryLifetimeMs], [healthPotions, lootSettings.potionLifetimeMs]]) {
         for (let i = pickups.length - 1; i >= 0; i--) {
+            if (pickups[i].pending) continue;
             if (gameClock.elapsedMs - pickups[i].spawnedAt >= lifetime || pickups[i].x < -32) pickups.splice(i, 1);
         }
     }
@@ -176,12 +240,32 @@ function updateLootPickups(segments) {
         const spawned = spawnHealthPotion();
         lootState.nextPotionAt = gameClock.elapsedMs + (spawned ? 18000 + Math.random() * 12000 : 3000);
     }
+    for (let i = bossLootDrops.length - 1; i >= 0; i--) {
+        const pickup = bossLootDrops[i];
+        if (pickup.pending) continue;
+        // Guaranteed boss rewards wait at the safe edge instead of being lost to scrolling.
+        const safeEdge = Math.min(canvas.width - 28, getDeathZoneWidth() + 35);
+        if (pickup.x < safeEdge) {
+            Object.assign(pickup, freeActorPoint({ x: safeEdge, y: pickup.y }, lootSettings.radius));
+        }
+        if (!pathTouchesPickup(pickup, segments, getMysteryPickupRadius(player.size / 2 + lootSettings.radius))) continue;
+        bossLootDrops.splice(i, 1);
+        if (pickup.kind === "weapon") upgradeRakeWeapon();
+        else {
+            player.seeds += pickup.seeds; updateSeedCount();
+            collectionEffects.push({ x: pickup.x, y: pickup.y - 30,
+                label: "Jackpot! +" + pickup.seeds + " seeds", collectedAt: gameClock.elapsedMs });
+            gameAudio.play("unlock");
+        }
+        updateStatsPanel();
+    }
     for (let i = healthPotions.length - 1; i >= 0; i--) {
-        if (player.health >= player.maxHealth || !pathTouchesPickup(healthPotions[i], segments, player.size / 2 + 19)) continue;
-        healthPotions.splice(i, 1); restoreHealth(lootSettings.potionHealing);
+        if (player.health >= player.maxHealth || !pathTouchesPickup(healthPotions[i], segments, getMysteryPickupRadius(player.size / 2 + 19))) continue;
+        healthPotions.splice(i, 1); restoreHealth(lootSettings.potionHealing + mysteryBonuses.potionBonus);
     }
     for (let i = mysteryBoxes.length - 1; i >= 0; i--) {
-        if (!pathTouchesPickup(mysteryBoxes[i], segments, player.size / 2 + lootSettings.radius)) continue;
+        if (mysteryBoxes[i].pending) continue;
+        if (!pathTouchesPickup(mysteryBoxes[i], segments, getMysteryPickupRadius(player.size / 2 + lootSettings.radius))) continue;
         mysteryBoxes.splice(i, 1);
         openMysteryChoice();
         break;
@@ -189,10 +273,13 @@ function updateLootPickups(segments) {
 }
 
 function resizeLootPickups() {
-    for (const pickups of [mysteryBoxes, healthPotions]) {
+    for (const pickups of [mysteryBoxes, healthPotions, bossLootDrops]) {
         for (let i = pickups.length - 1; i >= 0; i--) {
             const point = freeActorPoint(clampPointToCanvas(pickups[i].x, pickups[i].y), lootSettings.radius);
-            if (canvas.width < 100 || canvas.height - gameHudHeight < 100 || bodyTouchesWall(point.x, point.y, lootSettings.radius)) pickups.splice(i, 1);
+            if (canvas.width < 100 || canvas.height - gameHudHeight < 100 || bodyTouchesWall(point.x, point.y, lootSettings.radius)) {
+                if (pickups[i].bossDrop) pickups[i].pending = true;
+                else pickups.splice(i, 1);
+            }
             else Object.assign(pickups[i], point);
         }
     }
@@ -200,11 +287,25 @@ function resizeLootPickups() {
 
 function drawLootPickups() {
     ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const pickup of bossLootDrops) {
+        if (pickup.pending) continue;
+        const pulse = Math.sin((gameClock.elapsedMs - pickup.spawnedAt) / 200) * 3;
+        const color = pickup.kind === "weapon" ? "#9aeeff" : "#ffe085";
+        ctx.fillStyle = pickup.kind === "weapon" ? "rgba(115,216,255,.2)" : "rgba(255,217,101,.2)";
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(pickup.x, pickup.y, 27 + pulse, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = color; ctx.font = "bold 27px Arial";
+        ctx.fillText(pickup.kind === "weapon" ? "⚒" : "🌾", pickup.x, pickup.y);
+        ctx.font = "bold 11px Arial"; ctx.strokeStyle = "#152019"; ctx.lineWidth = 4;
+        const label = pickup.kind === "weapon" ? "WEAPON UPGRADE" : "JACKPOT · " + pickup.seeds;
+        ctx.strokeText(label, pickup.x, pickup.y + 40); ctx.fillText(label, pickup.x, pickup.y + 40);
+    }
     for (const box of mysteryBoxes) {
+        if (box.pending) continue;
         const remaining = Math.max(0, lootSettings.mysteryLifetimeMs - (gameClock.elapsedMs - box.spawnedAt));
         ctx.fillStyle = "rgba(182, 138, 255, .18)";
         ctx.beginPath(); ctx.arc(box.x, box.y, 31, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = remaining <= 2000 ? "#ff957c" : "#e6bbff"; ctx.lineWidth = 3;
+        ctx.strokeStyle = remaining <= 2000 ? "#ff957c" : box.bossDrop ? "#ffe29b" : "#e6bbff"; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(box.x, box.y, 31, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining / lootSettings.mysteryLifetimeMs); ctx.stroke();
         ctx.fillStyle = "#49345e"; ctx.strokeStyle = "#ffe29b"; ctx.lineWidth = 2;
         ctx.fillRect(box.x - 21, box.y - 23, 42, 46); ctx.strokeRect(box.x - 21, box.y - 23, 42, 46);

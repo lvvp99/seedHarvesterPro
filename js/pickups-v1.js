@@ -32,7 +32,7 @@ function updateCooldownPickups(segments) {
     for (let i = cooldownPickups.length - 1; i >= 0; i--) {
         const pickup = cooldownPickups[i];
         if (gameClock.elapsedMs - pickup.spawnedAt >= 18000 || pickup.x < -32) { cooldownPickups.splice(i, 1); continue; }
-        if (!pathTouchesPickup(pickup, segments, player.size / 2 + 23)) continue;
+        if (!pathTouchesPickup(pickup, segments, getMysteryPickupRadius(player.size / 2 + 23))) continue;
         cooldownPickups.splice(i, 1); resetAbilityCooldowns();
     }
 }

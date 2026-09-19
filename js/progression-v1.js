@@ -1,10 +1,10 @@
-// Every level has its own rake silhouette, material and ornamentation.
+// Weapons are loot progression, separate from the harvester's experience level.
 const rakeNames = ["Field Rake", "Copper Tines", "Bramble Rake", "Iron Harrow", "Steel Sweep",
     "Frost Fork", "Glacier Rake", "Storm Tines", "Thunder Harrow", "Skybreaker",
     "Ember Rake", "Blazing Fork", "Inferno Tines", "Sunforge", "Phoenix Harrow",
     "Void Rake", "Star Reaper", "Astral Harrow", "Celestial Crown", "Harvest Sovereign"];
 const rakeLevels = rakeNames.map((name, index) => ({
-    level: index + 1, name, damage: 20 + index * 7 + index * index * 2,
+    level: index + 1, name, damage: 12 + index * 2,
     tines: 3 + Math.floor(index / 2), headWidth: 16 + index * 0.65,
     tineLength: 7 + index % 5 * 1.5, bands: 1 + index % 5,
     color: ["#b8a58c", "#c88b58", "#adc892", "#b7c9d4", "#e5edf5",
@@ -12,49 +12,62 @@ const rakeLevels = rakeNames.map((name, index) => ({
         "#e99656", "#ffb957", "#ff7665", "#ffd271", "#fff0b0",
         "#b990ff", "#debdff", "#b1f1ff", "#fff6cb", "#ffd95a"][index]
 }));
-const maxPlayerLevel = 20;
 const rakeState = { nextThrowAt: 0, cooldownMs: 450, aimAngle: -Math.PI / 2 };
 
 function getXpRequired(level = player.level) {
-    return level >= maxPlayerLevel ? 0 : 40 + (level - 1) * 20 + (level - 1) ** 2 * 4;
+    return 40 + (level - 1) * 20 + (level - 1) ** 2 * 4;
 }
 
-function getRake(level = player.level) { return rakeLevels[clamp(level, 1, maxPlayerLevel) - 1]; }
+function getRake(tier = player.rakeTier) {
+    const rank = Math.max(1, Math.floor(tier));
+    const style = rakeLevels[(rank - 1) % rakeLevels.length];
+    const cycle = Math.floor((rank - 1) / rakeLevels.length);
+    return { ...style, tier: rank, damage: 12 + (rank - 1) * 2,
+        name: style.name + (cycle ? " · Ascended " + cycle : "") };
+}
 function getRakeDamage() { return Math.round(getRake().damage * player.rakeDamageMultiplier); }
 
-function awardXp(amount, position = player) {
+function upgradeRakeWeapon() {
+    player.rakeTier++;
+    const rake = getRake();
+    collectionEffects.push({ x: player.x, y: player.y - 35, label: "New weapon · " + rake.name, collectedAt: gameClock.elapsedMs });
+    gameAudio.play("unlock"); updateProgressionHud(); updateStatsPanel();
+    return rake;
+}
+
+function awardXp(amount, position = player, multiply = true) {
     if (!Number.isFinite(amount) || amount <= 0) return;
-    const reward = Math.floor(amount);
+    const reward = Math.floor(amount * (multiply ? getMysteryXpMultiplier() : 1));
     player.totalXp += reward;
-    if (player.level < maxPlayerLevel) player.xp += reward;
+    player.xp += reward;
     collectionEffects.push({ x: position.x, y: position.y, label: "+" + reward + " XP", collectedAt: gameClock.elapsedMs });
     let gained = false;
-    while (player.level < maxPlayerLevel && player.xp >= getXpRequired()) {
+    while (player.xp >= getXpRequired()) {
         player.xp -= getXpRequired();
         player.level++;
+        onMysteryLevelUp();
+        queueBossForLevel(player.level);
         gained = true;
     }
-    if (player.level === maxPlayerLevel) player.xp = 0;
     if (gained) {
         gameAudio.play("unlock");
         collectionEffects.push({ x: player.x, y: player.y - 25,
-            label: "Level " + player.level + " · " + getRake().name, collectedAt: gameClock.elapsedMs });
+            label: "Level " + player.level, collectedAt: gameClock.elapsedMs });
     }
     updateProgressionHud();
     updateStatsPanel();
 }
 
 function updateProgressionHud() {
-    const capped = player.level === maxPlayerLevel;
     const required = getXpRequired();
     const bar = document.getElementById("xpBar");
-    document.getElementById("playerLevel").textContent = player.level + "/20";
-    document.getElementById("xpText").textContent = capped ? "MAX LEVEL" : player.xp + " / " + required + " XP";
-    bar.style.width = (capped ? 100 : player.xp / required * 100) + "%";
+    document.getElementById("playerLevel").textContent = "Lv " + player.level;
+    document.getElementById("xpText").textContent = player.xp + " / " + required + " XP";
+    bar.style.width = player.xp / required * 100 + "%";
     const meter = document.getElementById("xpMeter");
-    meter.setAttribute("aria-valuenow", String(capped ? 100 : player.xp));
-    meter.setAttribute("aria-valuemax", String(capped ? 100 : required));
-    meter.setAttribute("aria-valuetext", capped ? "Maximum level, 20 of 20" : player.xp + " of " + required + " XP, level " + player.level + " of 20");
+    meter.setAttribute("aria-valuenow", String(player.xp));
+    meter.setAttribute("aria-valuemax", String(required));
+    meter.setAttribute("aria-valuetext", player.xp + " of " + required + " XP, level " + player.level);
     document.getElementById("rakeName").textContent = getRake().name;
     updateRakeStatus();
 }
@@ -75,11 +88,11 @@ function getPlayerAimAngle() {
 function throwRake() {
     if (!canControlPlayer() || (!isRakeFrenzyActive() && gameClock.elapsedMs < rakeState.nextThrowAt)) return false;
     const angle = getPlayerAimAngle();
-    const speed = 12 + player.level * 0.12;
+    const speed = 12 + Math.log2(player.rakeTier + 1) * 0.12;
     const count = isRakeFrenzyActive() ? abilityState.rakeFrenzy.castLevel || 1 : 1;
     for (let i = 0; i < count; i++) {
         const shotAngle = angle + (i - (count - 1) / 2) * 0.22;
-        bullets.push({ kind: "rake", level: player.level, x: player.x, y: player.y,
+        bullets.push({ kind: "rake", level: player.rakeTier, x: player.x, y: player.y,
             dx: Math.cos(shotAngle) * speed, dy: Math.sin(shotAngle) * speed, angle: shotAngle, size: Math.round(10 + getRake().headWidth * 0.4),
             damage: getRakeDamage(), piercing: player.unlocks.piercingRound,
             knockback: player.unlocks.knockback, explosive: player.unlocks.explosiveKernel,
@@ -93,6 +106,7 @@ function throwRake() {
 
 function drawRake(context, x, y, angle, level, scale = 1) {
     const rake = getRake(level);
+    level = rake.level;
     context.save(); context.translate(x, y); context.rotate(angle); context.scale(scale, scale);
     context.lineCap = "round"; context.lineJoin = "round";
     if (level >= 10) { context.shadowColor = rake.color; context.shadowBlur = 4 + level / 3; }
@@ -141,6 +155,6 @@ function drawHarvester(x = player.x, y = player.y, heldWeapon = true) {
     ctx.restore();
     if (heldWeapon && gameClock.elapsedMs >= rakeState.nextThrowAt) {
         drawRake(ctx, x + Math.cos(angle) * 8 - Math.sin(angle) * 19,
-            y + Math.sin(angle) * 8 + Math.cos(angle) * 19, angle, player.level, 0.75);
+            y + Math.sin(angle) * 8 + Math.cos(angle) * 19, angle, player.rakeTier, 0.75);
     }
 }
