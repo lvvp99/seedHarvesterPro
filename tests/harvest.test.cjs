@@ -2267,7 +2267,7 @@ test("cooldown reset pickups clear all six cooldowns once and preserve active ef
     assert.equal(game.elements.get("cooldownResetNotice").hidden, true);
 });
 
-test("cooldown pickups spawn on open ground, scroll, expire and do not advance while paused", () => {
+test("cooldown pickups spawn on open ground, scroll, persist and do not advance while paused", () => {
     const game = createGame({scrolling:true}); game.start();
     game.run("monsters.length=0; monsterState.nextSpawnAt=Infinity; weaponState.nextShotAt=Infinity; nextHaySpawnAt=Infinity;");
     game.key(" "); game.advance(30000);
@@ -2279,7 +2279,31 @@ test("cooldown pickups spawn on open ground, scroll, expire and do not advance w
     const x=game.run("cooldownPickups[0].x"); game.advance(50);
     assert.equal(game.run("cooldownPickups[0].x"), x-2.75);
     game.advance(18000);
+    assert.equal(game.run("cooldownPickups.length"), 1);
+});
+
+test("cooldown resets persist through elapsed time, the scrolling edge and temporarily blocked or tiny maps", () => {
+    const game = createCombatGame({scrolling:true});
+    game.run(`walls.length=0;worldState.nextWallX=Infinity;nextCooldownPickupAt=Infinity;
+        cooldownPickups.push({x:850,y:350,spawnedAt:0});gameClock.elapsedMs=600000;
+        updateCooldownPickups([]);`);
+    assert.equal(game.run("cooldownPickups.length"), 1);
+    game.run("cooldownPickups[0].x=-100;updateCooldownPickups([])");
+    assert.ok(game.run("cooldownPickups[0].x > getDeathZoneWidth()+24 && !cooldownPickups[0].pending"));
+    game.run("walls.push({x:0,y:0,width:1280,height:720});updateCooldownPickups([])");
+    assert.equal(game.run("cooldownPickups[0].pending"), true);
+    game.run("updateCooldownPickups([{x1:0,y1:350,x2:1280,y2:350}])");
+    assert.equal(game.run("cooldownPickups.length"), 1, "blocked pickup cannot be collected invisibly");
+    game.window.innerWidth=40; game.window.innerHeight=40; game.window.emit("resize");
+    assert.equal(game.run("cooldownPickups.length"), 1);
+    game.window.innerWidth=1280; game.window.innerHeight=720; game.window.emit("resize");
+    game.run("walls.length=0;updateCooldownPickups([])");
+    assert.equal(game.run("cooldownPickups[0].pending"), false);
+    assert.ok(game.run("!bodyTouchesWall(cooldownPickups[0].x,cooldownPickups[0].y,24)"));
+    game.run(`const reset= cooldownPickups[0];abilityState.teleport.lastUsedAt=gameClock.elapsedMs;
+        updateCooldownPickups([{x1:reset.x,y1:reset.y,x2:reset.x,y2:reset.y}]);`);
     assert.equal(game.run("cooldownPickups.length"), 0);
+    assert.equal(game.run("getCooldownRemainingMs('teleport')"), 0);
 });
 
 test("Time Freeze stops scrolling walls and pickups while leaving player controls and timers active", () => {
@@ -2958,7 +2982,7 @@ test("level cards grant exactly one unlimited character level while weapon cards
     assert.ok(game.run("getRakeDamage()") > damage);
 });
 
-test("three boss mystery boxes each survive reward selection and expire after five active seconds", () => {
+test("boss mystery boxes survive reward selection and remain indefinitely while random boxes expire", () => {
     const game = createCombatGame();
     game.run(`dropBossLoot(1,player);for(const box of mysteryBoxes)Object.assign(box,{x:player.x,y:player.y});
         const lootPath=[{x1:player.x,y1:player.y,x2:player.x,y2:player.y}];`);
@@ -2975,7 +2999,58 @@ test("three boss mystery boxes each survive reward selection and expire after fi
     const expiry = createCombatGame();
     expiry.run("dropBossLoot(1,player);for(const box of mysteryBoxes)Object.assign(box,{x:1000,y:350})");
     expiry.advance(4999); assert.equal(expiry.run("mysteryBoxes.length"), 3);
-    expiry.advance(1); assert.equal(expiry.run("mysteryBoxes.length"), 0);
+    expiry.advance(1); assert.equal(expiry.run("mysteryBoxes.length"), 3);
+    expiry.run("mysteryBoxes.push({x:950,y:350,spawnedAt:gameClock.elapsedMs})");
+    expiry.advance(600000); assert.equal(expiry.run("mysteryBoxes.length"), 3);
+    expiry.drawing.length=0; expiry.run("drawLootPickups()");
+    assert.equal(expiry.drawing.filter(call=>call.name==="fillText" && call.args[0]==="BOSS").length,3);
+    assert.equal(expiry.drawing.some(call=>call.name==="fillText" && /^\d+s$/.test(call.args[0])),false);
+});
+
+test("boss mystery boxes wait outside the death zone and survive resize until individually collected", () => {
+    const game=createCombatGame({scrolling:true});
+    game.run(`walls.length=0;worldState.nextWallX=Infinity;dropBossLoot(1,{x:1000,y:350});
+        for(const box of mysteryBoxes)box.x=-100;gameClock.elapsedMs=600000;updateLootPickups([]);`);
+    assert.equal(game.run("mysteryBoxes.length"),3);
+    assert.ok(game.run("mysteryBoxes.every(box=>box.x>getDeathZoneWidth()+24 && !box.pending)"));
+    game.window.innerWidth=40;game.window.innerHeight=40;game.window.emit("resize");
+    assert.equal(game.run("mysteryBoxes.length"),3);
+    assert.ok(game.run("mysteryBoxes.every(box=>box.pending)"));
+    game.run("updateLootPickups([{x1:0,y1:0,x2:40,y2:40}])");
+    assert.equal(game.run("isMysteryChoiceOpen()"),false);
+    game.window.innerWidth=1280;game.window.innerHeight=720;game.window.emit("resize");
+    game.run("walls.length=0;updateLootPickups([])");
+    assert.ok(game.run("mysteryBoxes.every(box=>!box.pending && !bodyTouchesWall(box.x,box.y,24))"));
+    for(let remaining=2;remaining>=0;remaining--){
+        game.run("{ const box=mysteryBoxes[0];updateLootPickups([{x1:box.x,y1:box.y,x2:box.x,y2:box.y}]); }");
+        assert.equal(game.run("mysteryBoxes.length"),remaining);
+        assert.equal(game.run("isMysteryChoiceOpen()"),true);
+        game.run("lootState.choices[0]=getMysteryBonuses().find(card=>card.id==='seeds');chooseMysteryBonus(0)");
+    }
+});
+
+test("mystery offers and rerolls never pair competing seed amounts while every seed reward remains available", () => {
+    const game=createCombatGame();
+    game.run("const originalRandom=Math.random;const seedIds=getMysteryBonuses().filter(c=>c.choiceGroup==='seed-stash').map(c=>c.id)");
+    const seedIds=game.read("seedIds");
+    assert.equal(seedIds.length,5);
+    for(const id of seedIds){
+        game.run(`{ let roll=0;const firstIndex=getMysteryBonuses().findIndex(c=>c.id===${JSON.stringify(id)});
+            Math.random=()=>roll++===0?(firstIndex+.5)/getMysteryBonuses().length:0;rollMysteryChoices(); }`);
+        assert.equal(game.run("lootState.choices[0].id"),id);
+        assert.equal(game.run("lootState.choices.filter(c=>c.choiceGroup==='seed-stash').length"),1);
+        assert.equal(game.run("new Set(lootState.choices.map(c=>c.id)).size"),3);
+    }
+    game.run("Math.random=originalRandom;player.seeds=1e12;openMysteryChoice()");
+    for(let i=0;i<300;i++){
+        const previous=game.read("lootState.choices.map(c=>c.id)");
+        game.run("player.seeds=1e12;lootState.rerolls=0;rerollMysteryChoices()");
+        assert.equal(game.run("lootState.choices.length"),3);
+        assert.ok(game.run("lootState.choices.filter(c=>c.choiceGroup==='seed-stash').length<=1"));
+        const next=game.read("lootState.choices.map(c=>c.id)");
+        assert.equal(new Set(next).size,3);
+        assert.ok(next.every(id=>!previous.includes(id)));
+    }
 });
 
 test("boss jackpot and weapon drops wait for pickup and can each be claimed only once", () => {

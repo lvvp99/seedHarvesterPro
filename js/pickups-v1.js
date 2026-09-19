@@ -31,7 +31,7 @@ function updateCooldownPickups(segments) {
     }
     for (let i = cooldownPickups.length - 1; i >= 0; i--) {
         const pickup = cooldownPickups[i];
-        if (gameClock.elapsedMs - pickup.spawnedAt >= 18000 || pickup.x < -32) { cooldownPickups.splice(i, 1); continue; }
+        if (!keepPersistentPickupOnMap(pickup)) continue;
         if (!pathTouchesPickup(pickup, segments, player.size / 2 + 23)) continue;
         cooldownPickups.splice(i, 1); resetAbilityCooldowns();
     }
@@ -46,6 +46,7 @@ function updateCooldownPickupHud() {
 function drawCooldownPickups() {
     ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
     for (const pickup of cooldownPickups) {
+        if (pickup.pending) continue;
         const pulse = Math.sin((gameClock.elapsedMs - pickup.spawnedAt) / 180) * 3;
         ctx.fillStyle = "rgba(94, 235, 255, 0.18)"; ctx.strokeStyle = "#6eebff"; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(pickup.x, pickup.y, 25 + pulse, 0, Math.PI * 2); ctx.fill(); ctx.stroke();

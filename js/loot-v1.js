@@ -66,7 +66,7 @@ function restoreHealth(amount) {
 
 function getMysteryBonuses() {
     const bonuses = [
-        { id: "seeds", icon: "🌾", kind: "Seed stash", name: "Golden harvest", description: "Gain 1,000 seeds to spend on upgrades.",
+        { id: "seeds", choiceGroup: "seed-stash", icon: "🌾", kind: "Seed stash", name: "Golden harvest", description: "Gain 1,000 seeds to spend on upgrades.",
             apply() { player.seeds += 1000; } },
         { id: "vitality", icon: "♥", kind: "Health", name: "Deep roots", description: "Gain 25 maximum HP and restore 25 HP.",
             apply() { player.maxHealth += 25; restoreHealth(25); } },
@@ -74,7 +74,7 @@ function getMysteryBonuses() {
             apply() { player.rakeDamageMultiplier *= 1.15; } }
     ];
     for (const [amount, name] of [[500, "Seed pouch"], [1500, "Bumper crop"], [2000, "Harvest fortune"], [3000, "Seed bonanza"]]) {
-        bonuses.push({ id: "seeds" + amount, icon: "🌾", kind: "Seed stash", name,
+        bonuses.push({ id: "seeds" + amount, choiceGroup: "seed-stash", icon: "🌾", kind: "Seed stash", name,
             description: "Gain " + amount.toLocaleString("en") + " seeds to spend on upgrades.",
             apply() { player.seeds += amount; } });
     }
@@ -119,6 +119,26 @@ function findNearbyLootPosition(anchor, occupied = [], index = 0) {
     return !bodyTouchesWall(candidate.x, candidate.y, radius) ? candidate : null;
 }
 
+// Unclaimed permanent map pickups wait outside the death zone, even after resizing.
+// If no ground is available, defer placement without deleting the reward.
+function keepPersistentPickupOnMap(pickup, radius = lootSettings.radius) {
+    const left = getDeathZoneWidth() + radius + 11;
+    const right = canvas.width - radius - 4;
+    const top = gameHudHeight + radius + 4;
+    const bottom = canvas.height - radius - 4;
+    const fits = point => point && point.x >= left && point.x <= right && point.y >= top && point.y <= bottom
+        && !bodyTouchesWall(point.x, point.y, radius);
+    if (right < left || bottom < top) { pickup.pending = true; return false; }
+    let point = { x: clamp(pickup.x, left, right), y: clamp(pickup.y, top, bottom) };
+    if (!fits(point)) {
+        point = freeActorPoint(point, radius);
+        if (!fits(point)) point = findNearbyLootPosition(pickup);
+    }
+    if (!fits(point)) { pickup.pending = true; return false; }
+    Object.assign(pickup, point, { pending: false });
+    return true;
+}
+
 function spawnMysterySupplies(kind, count) {
     const occupied = [...mysteryBoxes, ...healthPotions, ...weaponPickups, ...bossLootDrops];
     let spawned = 0;
@@ -155,12 +175,18 @@ function dropBossLoot(stage, point) {
 
 function rollMysteryChoices(previous = []) {
     const pool = getMysteryBonuses();
-    const unseen = pool.filter(bonus => !previous.includes(bonus.id));
-    const seen = pool.filter(bonus => previous.includes(bonus.id));
+    let unseen = pool.filter(bonus => !previous.includes(bonus.id));
+    let seen = pool.filter(bonus => previous.includes(bonus.id));
     lootState.choices = [];
     for (let i = 0; i < 3; i++) {
         const options = unseen.length ? unseen : seen;
-        lootState.choices.push(options.splice(Math.floor(Math.random() * options.length), 1)[0]);
+        const chosen = options[Math.floor(Math.random() * options.length)];
+        lootState.choices.push(chosen);
+        // Different amounts of the same reward must never compete on one screen.
+        const compatible = bonus => bonus.id !== chosen.id
+            && (!chosen.choiceGroup || bonus.choiceGroup !== chosen.choiceGroup);
+        unseen = unseen.filter(compatible);
+        seen = seen.filter(compatible);
     }
 }
 
@@ -236,14 +262,12 @@ mysteryDialog.addEventListener("close", () => {
 
 function updateLootPickups(segments) {
     if (!canControlPlayer()) return;
-    for (const pickup of [...mysteryBoxes, ...bossLootDrops]) {
-        if (!pickup.pending) continue;
-        const point = findNearbyLootPosition(pickup, [...mysteryBoxes, ...bossLootDrops].filter(other => other !== pickup));
-        if (point) Object.assign(pickup, point, { pending: false, spawnedAt: gameClock.elapsedMs });
+    for (const pickup of [...mysteryBoxes.filter(box => box.bossDrop), ...bossLootDrops]) {
+        keepPersistentPickupOnMap(pickup);
     }
     for (const [pickups, lifetime] of [[mysteryBoxes, lootSettings.mysteryLifetimeMs], [healthPotions, lootSettings.potionLifetimeMs], [weaponPickups, lootSettings.weaponLifetimeMs]]) {
         for (let i = pickups.length - 1; i >= 0; i--) {
-            if (pickups[i].pending) continue;
+            if (pickups[i].pending || pickups[i].bossDrop) continue;
             if (gameClock.elapsedMs - pickups[i].spawnedAt >= lifetime || pickups[i].x < -32) pickups.splice(i, 1);
         }
     }
@@ -262,11 +286,6 @@ function updateLootPickups(segments) {
     for (let i = bossLootDrops.length - 1; i >= 0; i--) {
         const pickup = bossLootDrops[i];
         if (pickup.pending) continue;
-        // Guaranteed boss rewards wait at the safe edge instead of being lost to scrolling.
-        const safeEdge = Math.min(canvas.width - 28, getDeathZoneWidth() + 35);
-        if (pickup.x < safeEdge) {
-            Object.assign(pickup, freeActorPoint({ x: safeEdge, y: pickup.y }, lootSettings.radius));
-        }
         if (!pathTouchesPickup(pickup, segments, player.size / 2 + lootSettings.radius)) continue;
         bossLootDrops.splice(i, 1);
         if (pickup.kind === "weapon") upgradeRakeWeapon(pickup.weaponLevels || 1);
@@ -305,6 +324,7 @@ function updateLootPickups(segments) {
 function resizeLootPickups() {
     for (const pickups of [mysteryBoxes, healthPotions, weaponPickups, bossLootDrops]) {
         for (let i = pickups.length - 1; i >= 0; i--) {
+            if (pickups[i].bossDrop) { keepPersistentPickupOnMap(pickups[i]); continue; }
             const point = freeActorPoint(clampPointToCanvas(pickups[i].x, pickups[i].y), lootSettings.radius);
             if (canvas.width < 100 || canvas.height - gameHudHeight < 100 || bodyTouchesWall(point.x, point.y, lootSettings.radius)) {
                 if (pickups[i].bossDrop) pickups[i].pending = true;
@@ -352,7 +372,8 @@ function drawLootPickups() {
     }
     for (const box of mysteryBoxes) {
         if (box.pending) continue;
-        const remaining = Math.max(0, lootSettings.mysteryLifetimeMs - (gameClock.elapsedMs - box.spawnedAt));
+        const remaining = box.bossDrop ? lootSettings.mysteryLifetimeMs
+            : Math.max(0, lootSettings.mysteryLifetimeMs - (gameClock.elapsedMs - box.spawnedAt));
         ctx.fillStyle = "rgba(182, 138, 255, .18)";
         ctx.beginPath(); ctx.arc(box.x, box.y, 31, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = remaining <= 2000 ? "#ff957c" : box.bossDrop ? "#ffe29b" : "#e6bbff"; ctx.lineWidth = 3;
@@ -362,7 +383,7 @@ function drawLootPickups() {
         ctx.fillStyle = "#ffe29b"; ctx.fillRect(box.x - 24, box.y - 25, 48, 7);
         ctx.font = "bold 23px Arial"; ctx.fillText("?", box.x, box.y - 5);
         ctx.font = "bold 12px Arial"; ctx.fillStyle = "#fff5dc";
-        ctx.fillText(Math.ceil(remaining / 1000) + "s", box.x, box.y + 14);
+        ctx.fillText(box.bossDrop ? "BOSS" : Math.ceil(remaining / 1000) + "s", box.x, box.y + 14);
     }
     for (const potion of healthPotions) {
         ctx.fillStyle = "rgba(255, 106, 130, .16)";

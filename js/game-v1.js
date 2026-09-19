@@ -711,9 +711,10 @@ function resizeGameCanvas() {
         }
     }
 
-    for (const pickup of [...harvestPickups, ...cooldownPickups]) {
+    for (const pickup of harvestPickups) {
         Object.assign(pickup, freeActorPoint(clampPointToCanvas(pickup.x, pickup.y), 24));
     }
+    for (const pickup of cooldownPickups) keepPersistentPickupOnMap(pickup);
 }
 
 // --------------------
