@@ -149,7 +149,7 @@ const player = {
 
 const upgradeLevels = Object.fromEntries(Object.entries(statsUpgrades).filter(([, upgrade]) => upgrade.repeatable).map(([name]) => [name, 0]));
 // Fixed gains avoid exponential stat growth. Only cooldowns reduce proportionally.
-const upgradeGains = { maxHealth: 2, moveSpeed: 0.03, damage: 0.45, bulletSpeed: 0.25, fireRate: 0.025, criticalChance: 0.0055, seedValue: 0.015, cooldown: 0.005 };
+const upgradeGains = { maxHealth: 2, moveSpeed: 0.03, damage: 0.75, bulletSpeed: 0.40, fireRate: 0.040, criticalChance: 0.008, seedValue: 0.015, cooldown: 0.005 };
 
 
 const abilityState = {

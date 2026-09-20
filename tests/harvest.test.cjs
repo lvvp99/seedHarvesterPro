@@ -883,9 +883,9 @@ test("stats update after purchases and collapse/expand without changing the game
     }
     assert.equal(game.elements.get("statSpeed").textContent, "180/s");
     assert.equal(game.elements.get("statHealth").textContent, "102 / 102");
-    assert.equal(game.elements.get("statDamage").textContent, "8.45");
-    assert.equal(game.elements.get("statBulletSpeed").textContent, "615/s");
-    assert.equal(game.elements.get("statCriticalChance").textContent, "0.55%");
+    assert.equal(game.elements.get("statDamage").textContent, "8.75");
+    assert.equal(game.elements.get("statBulletSpeed").textContent, "624/s");
+    assert.equal(game.elements.get("statCriticalChance").textContent, "0.8%");
     assert.equal(game.elements.get("statWeaponEffects").textContent, "None");
     const button = game.elements.get("statsToggle");
     button.emit("click");
@@ -906,7 +906,7 @@ test("all repeatable stats upgrades increase values and prices without casting a
    assert.equal(game.run("player.seeds"),before-cost); assert.equal(Number(b.dataset.cost),Math.ceil(cost*1.05));
    assert.equal(game.run("armedAbility"),"teleport");
  }
- assert.equal(game.run("player.maxHealth"),102); assert.equal(game.run("player.damage"),8.45);
+ assert.equal(game.run("player.maxHealth"),102); assert.equal(game.run("player.damage"),8.75);
  assert.equal(game.run("getRake().damage"),12,"basic upgrades do not change rake damage");
 });
 
@@ -954,18 +954,18 @@ test("all stats purchases apply during pause while time, actors and cooldowns re
         assert.deepEqual(game.read(snapshot), paused);
     }
     assert.equal(game.run("player.maxHealth"), 102);
-    assert.equal(game.run("player.damage"), 8.45);
-    assert.equal(game.run("player.bulletSpeed"), 10.25);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.775) < 1e-9);
-    assert.equal(game.run("player.criticalChance"), 0.0055);
+    assert.equal(game.run("player.damage"), 8.75);
+    assert.equal(game.run("player.bulletSpeed"), 10.4);
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.79) < 1e-9);
+    assert.equal(game.run("player.criticalChance"), 0.008);
     assert.equal(game.run("player.seedMultiplier"),1.015);
     assert.equal(game.run("weaponState.nextShotAt - gameClock.elapsedMs"), 2000 / (game.run("player.fireRate") / 0.75));
     game.elements.get("pauseBtn").emit("click");
-    game.advance(1930);
+    game.advance(1890);
     assert.equal(game.run("bullets.length"), 0);
     game.advance(20);
     assert.equal(game.run("bullets.length"), 1, "resuming uses the upgraded fire rate");
-    assert.equal(game.run("bullets[0].damage"), 8.45);
+    assert.equal(game.run("bullets[0].damage"), 8.75);
 });
 
 test("all five abilities are free and ready on the first HUD click or number-key press", () => {
@@ -1203,9 +1203,9 @@ test("Fire Rate is repeatable, costs seeds, updates stats, and speeds up the pen
     button.emit("click");
     assert.equal(game.run("player.seeds"), 6);
     assert.equal(game.run("upgradeLevels.fireRate"), 1);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.775/s");
+    assert.equal(game.elements.get("statFireRate").textContent, "0.79/s");
     assert.equal(Number(button.dataset.cost), 3);
-    game.advance(999);
+    game.advance(981);
     assert.equal(game.run("bullets.length"), 1);
     game.advance(2);
     assert.equal(game.run("bullets.length"), 2);
@@ -1213,8 +1213,8 @@ test("Fire Rate is repeatable, costs seeds, updates stats, and speeds up the pen
     button.emit("click");
     assert.equal(game.run("player.seeds"), 3);
     assert.equal(game.run("upgradeLevels.fireRate"), 2);
-    assert.ok(Math.abs(game.run("player.fireRate") - 0.8) < 0.000001);
-    assert.equal(game.elements.get("statFireRate").textContent, "0.8/s");
+    assert.ok(Math.abs(game.run("player.fireRate") - 0.83) < 0.000001);
+    assert.equal(game.elements.get("statFireRate").textContent, "0.83/s");
     assert.equal(Number(button.dataset.cost), 4);
     assert.equal(button.disabled, false);
     button.emit("click");
@@ -2359,7 +2359,7 @@ test("basic attack balance favors rake damage while inexpensive upgrades still i
     assert.equal(base,6);
     game.run("player.seeds=4");
     game.elements.get("upgradeDamage").emit("click"); game.elements.get("upgradeFireRate").emit("click");
-    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.54875)<1e-8);
+    assert.ok(Math.abs(game.run("player.damage*player.fireRate")-6.9125)<1e-8);
     assert.equal(game.run("player.seeds"),0);
     assert.equal(game.run("getRake().damage"),12);
 });
